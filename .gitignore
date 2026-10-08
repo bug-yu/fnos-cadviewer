@@ -16,7 +16,10 @@ fpk/cadviewer/app/ui/www/cad-data/
 # 第三方 SDK（@trimjs/web-app 的 ESM 产物，115 KB）—— 也从 npm 拷，不手改
 fpk/cadviewer/app/ui/www/vendor/
 
-# ===== 前端依赖 =====
+# ===== 前端依赖（页面构建，几百 MB，绝不进仓库）=====
+page/node_modules/
+page/dist/
+page/package-lock.json
 p0/node_modules/
 p0/package-lock.json
 
