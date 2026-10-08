@@ -14,6 +14,36 @@
 > —— 这样多重引线、面域边框、字体都能正常还原。
 > DXF 用内置解析器（`AcDbNativeDxfConverter`），**不需要** worker/wasm。
 
+## 支持哪些格式
+
+| 格式 | 支持 | 说明 |
+|---|---|---|
+| **DWG** | ✅ | LibreDWG（WASM，worker 里跑） |
+| **DXF** | ✅ | 内置解析器 |
+| **DWF / DWFx / XPS** | ❌ **不支持** | 见下 |
+
+**为什么没有 DWF**：`@mlightcad/data-model` 的 `AcDbFileType` 枚举**只有 `DXF` / `DWG`**，
+整个栈里没有 DWF 解析器；LibreDWG 本身也只管 DWG/DXF。
+
+要用 DWF 的话只有换/加引擎 —— 可选项是
+[`dwf-viewer`](https://www.npmjs.com/package/dwf-viewer) 或
+[`@flyfish-dev/cad-viewer`](https://www.npmjs.com/package/@flyfish-dev/cad-viewer)
+（DWF/DWFx/XPS，纯前端），
+⚠️ 但**两者都是 `AGPL-3.0-only`** —— 一旦引入，整个组合作品的许可会变成 AGPL-3.0
+（AGPL 把「通过网络提供服务」也算分发），**需要先确认接受**。
+
+务实做法：DWF 本质是 Autodesk 的「发布/打印」格式，多数场景转成 **PDF 或 DXF** 即可
+（FileView 已有 PDF 预览）。
+
+## 界面语言
+
+两个入口都是**中文**：
+
+- 完整版 —— 由 `MlCadViewer` 的 `locale="zh"` 控制
+- 简易版 —— 由 `page/src/i8n/index.ts` 里的 **`AcApI18n.setCurrentLocale('zh')`** 控制
+  ⚠️ 只 `mergeLocaleMessage`（注册文案）**不会**切换语言，库的默认是 `en` ✗
+  → **两个入口要分别处理**
+
 ---
 
 ## 体积怎么控制的（**一个应用**的根本原因）
