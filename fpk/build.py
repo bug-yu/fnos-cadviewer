@@ -88,6 +88,24 @@ def check():
         print("     右键预览 url = %s" % view_url)
     ok &= routing
 
+    # 应用设置里的显示：入口**保留**，只藏「访问端口 / 访问路径 / 自定义 URL」三行。
+    # ⚠️ 别用 accessPerm=hidden ✗ —— 实测（FileView 那边早就踩过）它会把**整个入口**
+    #    一起隐藏，而不是只隐藏设置项；官方文档只记了它 editable/readonly/hidden 三态。
+    #    portPerm / pathPerm / fullUrlPerm 官方文档**未记载**，是照第三方应用抄来的，
+    #    真正把那三行藏起来的就是它们 ✓
+    ctrl_bad = []
+    for name in ("cadviewer.Application", "cadviewer.view"):
+        c = entries.get(name, {}).get("control", {})
+        if c.get("accessPerm") != "editable":
+            ctrl_bad.append("%s.accessPerm=%r（应为 editable）" % (name, c.get("accessPerm")))
+        for k in ("portPerm", "pathPerm", "fullUrlPerm"):
+            if c.get(k) != "hidden":
+                ctrl_bad.append("%s.%s=%r（应为 hidden）" % (name, k, c.get(k)))
+    print("  设置页只藏「端口/路径/自定义URL」三行 : %s" % ("✓" if not ctrl_bad else "✗"))
+    for b in ctrl_bad:
+        print("     %s" % b)
+    ok &= not ctrl_bad
+
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []
     for n in ("cmd/install_callback", "cmd/upgrade_callback"):

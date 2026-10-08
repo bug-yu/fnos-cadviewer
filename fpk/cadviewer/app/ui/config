@@ -8,7 +8,10 @@
       "url": "/cgi/ThirdParty/cadviewer/index.cgi/full/index.html",
       "allUsers": true,
       "control": {
-        "accessPerm": "hidden"
+        "accessPerm": "editable",
+        "portPerm": "hidden",
+        "pathPerm": "hidden",
+        "fullUrlPerm": "hidden"
       }
     },
     "cadviewer.view": {
@@ -21,7 +24,10 @@
       "noDisplay": true,
       "allUsers": true,
       "control": {
-        "accessPerm": "hidden"
+        "accessPerm": "editable",
+        "portPerm": "hidden",
+        "pathPerm": "hidden",
+        "fullUrlPerm": "hidden"
       }
     }
   }
