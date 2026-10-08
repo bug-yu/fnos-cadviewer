@@ -227,6 +227,57 @@ if [ "$REL_PATH" = "/api/diag" ]; then
   exit 0
 fi
 
+# ── API: /api/acl —— 试调官方后端 API trim.file.checkUserACL ─────────────────
+# 目的：验证「CGI 能不能调后端 API」。已实测 CGI 拿不到 TRIM_API_TOKEN ✗，
+#   但 socket 存在 ✓、curl 可用 ✓ —— 所以试两种：不带 token / 带 token（若有）。
+# 这一步只做**验证**，不做拦截 ✓（真正接进 /api/raw 要等它跑通 ✓）
+if [ "$REL_PATH" = "/api/acl" ]; then
+  P="$(qget_path || true)"
+  RUID="${HTTP_X_TRIM_USERID:-}"
+  echo "Content-Type: text/plain; charset=utf-8"
+  echo "Cache-Control: no-store"
+  echo ""
+  echo "== 环境 =="
+  echo "uid           : ${RUID:-(未设置)}"
+  echo "token         : ${TRIM_API_TOKEN:+已设置}${TRIM_API_TOKEN:-（未设置）}"
+  echo "socket        : $(ls -l /var/run/trim_open_gateway_apiscope.socket 2>&1)"
+  echo "socket 可写?   : $([ -w /var/run/trim_open_gateway_apiscope.socket ] && echo yes || echo no)"
+  echo "socket 可读?   : $([ -r /var/run/trim_open_gateway_apiscope.socket ] && echo yes || echo no)"
+  echo
+  echo "== 目标 =="
+  echo "path          : ${P:-(未传，用一个默认的)}"
+  [ -z "$P" ] && P="/vol1/1000/ssd/test/标准图框.dwg"
+  echo
+  if [ -z "$RUID" ]; then
+    echo "✗ 拿不到 uid，无法构造请求"
+    exit 0
+  fi
+  # JSON 里的路径要转义引号与反斜杠（路径里出现 " 或 \ 的极少，但别让它破坏 JSON）
+  ESC=$(printf '%s' "$P" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  BODY="{\"reqId\":\"diag-$$\",\"req\":\"trim.file.checkUserACL\",\"appName\":\"cadviewer\",\"data\":{\"uid\":$RUID,\"path\":\"$ESC\"}}"
+  echo "请求体        : $BODY"
+  echo
+  echo "──── ① 不带 token ────"
+  curl -sS --unix-socket /var/run/trim_open_gateway_apiscope.socket \
+    -X POST http://localhost/api/v1/trimapp \
+    -H 'Content-Type: application/json' \
+    --max-time 20 \
+    -d "$BODY" 2>&1 | head -30
+  echo
+  echo "──── ② 带 token（若环境里有）────"
+  if [ -n "${TRIM_API_TOKEN:-}" ]; then
+    curl -sS --unix-socket /var/run/trim_open_gateway_apiscope.socket \
+      -X POST http://localhost/api/v1/trimapp \
+      -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer ${TRIM_API_TOKEN}" \
+      --max-time 20 \
+      -d "$BODY" 2>&1 | head -30
+  else
+    echo "（没有 token，跳过）"
+  fi
+  exit 0
+fi
+
 # ── API: /api/raw —— 读文件（给查看器）──────────────────────────────────────
 if [ "$REL_PATH" = "/api/raw" ]; then
   P="$(qget_path || true)"
