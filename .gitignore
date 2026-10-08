@@ -1,0 +1,17 @@
+# ===== 构建产物 =====
+# 安装包是构建产物，不进仓库；用 fpk/tools/fnpack.exe build -d cadviewer 生成
+*.fpk
+
+# ===== 打包工具二进制 =====
+fpk/tools/fnpack.exe
+fpk/tools/fnpack
+
+# ===== 前端依赖 =====
+# P0 页面刻意不用打包器，但源码目录仍保留 npm 项目（方便以后需要时切换）
+p0/node_modules/
+p0/package-lock.json
+
+# ===== 系统垃圾 =====
+.DS_Store
+__pycache__/
+*.pyc

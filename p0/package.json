@@ -1,0 +1,18 @@
+{
+  "name": "cadviewer-p0",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "P0 验证页：飞牛开放 API 的 pickUserFile 能不能在桌面窗口（微应用环境）里用",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.2",
+    "vite": "^6.4.3"
+  },
+  "dependencies": {
+    "@trimjs/web-app": "^0.4.2"
+  }
+}

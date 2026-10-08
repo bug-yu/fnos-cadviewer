@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAD 查看器 · P0 验证</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; padding: 20px;
+      font: 14px/1.6 system-ui, -apple-system, "Microsoft YaHei", sans-serif;
+      background: #f5f6f8; color: #1f2329;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+    .card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 12px;
+    }
+    .card h2 { font-size: 13px; margin: 0 0 10px; color: #374151; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      font: inherit; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+      border: 1px solid #d0d5dd; background: #fff; color: #1f2329;
+    }
+    button:hover { background: #f2f4f7; }
+    button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+    button.primary:hover { background: #1d4ed8; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    pre {
+      margin: 8px 0 0; padding: 10px 12px; border-radius: 8px;
+      background: #0f172a; color: #e2e8f0; font-size: 12px;
+      white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow: auto;
+    }
+    .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; }
+    .kv b { font-weight: 600; color: #374151; }
+    .ok { color: #059669; font-weight: 600; }
+    .bad { color: #dc2626; font-weight: 600; }
+    .warn { color: #d97706; font-weight: 600; }
+    .hint { font-size: 12px; color: #6b7280; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>CAD 查看器 · P0 验证</h1>
+  <div class="sub">
+    目的：确认「选择飞牛 NAS 上的文件」这个能力在**桌面窗口里**能不能用。
+    打开页面后请先看下面第一张卡片，再点按钮。
+  </div>
+
+  <div class="card">
+    <h2>① 运行环境（页面一打开就自动检测）</h2>
+    <div class="kv" id="env"><span>检测中…</span></div>
+    <div class="hint" id="envHint"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 选择文件（这一步是关键）</h2>
+    <div class="row">
+      <button class="primary" id="pickFile">选择 CAD 文件（dwg/dxf）</button>
+      <button id="pickDir">选择图纸文件夹</button>
+      <button id="pickAny">选任意文件（不限扩展名）</button>
+    </div>
+    <div class="hint">
+      正常的话会**弹出飞牛自己的文件选择器**；选完把路径回填到下面。
+      如果弹不出来、或报错，把下面「结果」里的内容截图给我即可。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ 结果（出错时请把这一整块截图）</h2>
+    <pre id="out">（还没操作）</pre>
+  </div>
+
+  <div class="card">
+    <h2>④ 平台配置（顺带确认 SDK 通不通）</h2>
+    <pre id="cfg">（读取中…）</pre>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

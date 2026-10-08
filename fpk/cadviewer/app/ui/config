@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "cadviewer.Application": {
+      "title": "CAD 查看器",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "microApp": true,
+      "protocol": "http",
+      "port": "8080",
+      "url": "/cgi/ThirdParty/cadviewer/index.cgi/",
+      "allUsers": true
+    }
+  }
+}
