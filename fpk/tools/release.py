@@ -102,6 +102,13 @@ have = {a["name"]: a["size"] for a in rel.get("assets", [])}
 if have.get(name) == size:
     print("④ %s 已在 Release 上（%d 字节）" % (name, size))
 else:
+    # ⚠️ 同名资产**必须先删再传** ✗ —— 否则 GitHub 返回
+    #    422 Validation Failed: "already_exists"（0.2.4 就撞了 ✗）
+    for a in rel.get("assets", []):
+        if a["name"] == name:
+            st, _ = api("DELETE", "https://api.github.com/repos/%s/releases/assets/%s"
+                        % (REPO, a["id"]))
+            print("④ 删掉同名旧资产（%d 字节）→ HTTP %s" % (a["size"], st))
     print("④ 上传 %s（%d 字节）…" % (name, size))
     url = ("https://uploads.github.com/repos/%s/releases/%s/assets?name=%s"
            % (REPO, rel["id"], urllib.parse.quote(name)))
