@@ -27,6 +27,7 @@
 """
 import hashlib
 import io
+import json
 import os
 import re
 import subprocess
@@ -54,7 +55,15 @@ def check():
 
     with tarfile.open(fileobj=io.BytesIO(app), mode="r:gz") as t2:
         inner = [m.name for m in t2.getmembers() if m.isfile()]
-    for k in ("ui/config", "ui/index.cgi", "ui/www/index.html",
+    for k in ("ui/config", "ui/index.cgi",
+              # 简易版（右键预览）
+              "ui/www/index.html",
+              "ui/www/callback.html",
+              # 完整版（桌面图标）—— 0.4.0 起入口指向这里
+              "ui/www/full/index.html",
+              "ui/www/full/callback.html",
+              "ui/www/full/assets/mtext-renderer-worker.js",
+              # 两个页面共享的大资源（只此一份）
               "ui/www/assets/libredwg-web.wasm",
               "ui/www/cad-data/fonts"):
         hit = any(nm.endswith(k) or k in nm for nm in inner)
@@ -64,6 +73,20 @@ def check():
     print("  字体文件数（应 >= 80）             : %d %s"
           % (len(fonts), "✓" if len(fonts) >= 80 else "✗"))
     ok &= len(fonts) >= 80
+
+    # 入口分流（0.4.0 起）：桌面图标 → 完整版 /full/，右键预览 → 简易版 /
+    # （0.2.x 那几次的 404 全出在入口配置上，所以这里也断言一下）
+    with tarfile.open(fileobj=io.BytesIO(app), mode="r:gz") as t2:
+        uicfg = json.loads(t2.extractfile("ui/config").read().decode("utf-8"))
+    entries = uicfg.get(".url", {})
+    app_url = entries.get("cadviewer.Application", {}).get("url", "")
+    view_url = entries.get("cadviewer.view", {}).get("url", "")
+    routing = app_url.endswith("/full/index.html") and not view_url.endswith("/full/index.html")
+    print("  入口分流（桌面→/full/、右键→简易版）: %s" % ("✓" if routing else "✗"))
+    if not routing:
+        print("     桌面图标 url = %s" % app_url)
+        print("     右键预览 url = %s" % view_url)
+    ok &= routing
 
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []

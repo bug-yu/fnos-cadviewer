@@ -1,39 +1,45 @@
 # 飞牛 CAD 查看器（fnOS CAD Viewer）
 
-把 [mlightcad/cad-viewer](https://github.com/mlightcad/cad-viewer)（开源、MIT）打包成飞牛 fnOS 的
-原生 `.fpk` 应用：
+把 [mlightcad/cad-viewer](https://github.com/mlightcad/cad-viewer)（MIT）打包成飞牛 fnOS 的
+原生 `.fpk` 应用：**一个应用、两个入口**
 
-- **文件管理器右键预览** → 调**简易查看器**（`cad-simple-viewer`，带工具栏/图层/测量）
-- **桌面图标打开** → 调**完整版**（`cad-viewer`，菜单 / 功能区 / 命令行）
-- 能打开**飞牛 NAS 上自己有权限的图纸**，也能打开**本地文件**
+| 入口 | 触发方式 | 页面 | 界面 |
+|---|---|---|---|
+| `cadviewer.Application` | **桌面图标** / 应用中心卡片 | `/cgi/ThirdParty/cadviewer/index.cgi/full/index.html` | **完整版**（Vue 3：菜单 / 功能区 / 命令行 / 状态栏） |
+| `cadviewer.view` | 文件管理器**右键**「用 CAD 查看器打开」 | `/cgi/ThirdParty/cadviewer/index.cgi/index.html` | **简易版**（`cad-simple-viewer` + `cad-simple-ui-plugin`） |
 
-> 引擎（DWG 解析）用 **LibreDWG**（GPL-3.0）+ 打包 **86 个 SHX 字体**（`mlightcad/cad-data`）
-> —— 这样多重引线、面域边框、字体都能正常还原（对比过：引擎自带的 CAD 转换器这三项都不行）。
+两种方式都能打开**飞牛 NAS 上自己有权限的图纸**，也都能打开**本地文件**（拖拽 / 选择）。
+
+> 引擎（DWG 解析）用 **LibreDWG**（GPL-3.0）+ 打包 **101 个字体文件**（`mlightcad/cad-data`）
+> —— 这样多重引线、面域边框、字体都能正常还原。
+> DXF 用内置解析器（`AcDbNativeDxfConverter`），**不需要** worker/wasm。
 
 ---
 
-## 当前状态：**P0 验证版**（v0.1.0）
+## 体积怎么控制的（**一个应用**的根本原因）
 
-**只做一件事**：验证飞牛开放 API 的 **`pickUserFile`**（选择文件/目录并**自动授权给应用**）
-能不能在**桌面窗口**里使用。
+字体（54 MB）与 LibreDWG WASM（9.5 MB）**只打一份** ✓：
 
-**为什么必须先验这个**：整个应用的核心是
-「让用户选 NAS 上的图纸 → 拿到**已授权**的路径 → 交给查看器打开」。
-如果这个 API 在桌面窗口里不可用，方案就要换（改成自己实现目录浏览 + 权限判定）。
+```
+www/
+├── index.html + callback.html      ← 简易版（右键预览）
+├── assets/                         ← **两个页面共用**（同一次 vite 构建，chunk 带哈希不会撞）
+│   ├── libredwg-parser-worker.js + libredwg-web.wasm   ← 只此一份 ✓（省 9.5 MB）
+│   ├── mtext-renderer-worker.js
+│   └── viewer-runtime.iife.js      ← 「导出为 HTML」的离线运行时
+├── cad-data/                       ← 字体/模板/data（54 MB，只此一份）
+└── full/
+    ├── index.html + callback.html  ← 完整版（桌面图标）
+    └── assets/
+        └── mtext-renderer-worker.js  ← ⚠️ 只有这一个必须复制一份
+```
 
-**这个包不含 CAD 查看器**，只有一个诊断页（约 45 KB）。
-
-### 装完请这样做
-
-1. 从**桌面图标**（或应用中心卡片）打开「CAD 查看器」
-2. 看页面**第 ① 张卡片**：
-   - `isWeb` / `isStandaloneWeb` 的值
-   - 提示是「✅ 跑在宿主环境里」还是「⚠️ 被当成独立浏览器页面」
-3. 点 **「选择 CAD 文件」** → 应该**弹出飞牛自己的文件选择器**
-4. 选一个 dwg/dxf → 看第 ③ 张卡片里**返回的路径**
-5. 再点 **「选择图纸文件夹」** 试一次（这条决定能不能做"应用内浏览"）
-
-**把整个页面截图**即可 —— 页面设计成**出错也会把原因写清楚**，一张图就能定位。
+**为什么只有 MTEXT worker 要复制**：`@mlightcad/cad-viewer` **没有** `webworkerFileUrls`
+这个 prop ✗ → MTEXT worker 的地址走 `cad-simple-viewer` 的默认值
+`./assets/mtext-renderer-worker.js`（**相对页面**）→ 完整版页面在 `full/` 下，
+默认就指到 `full/assets/` ✓。
+其余两个（LibreDWG worker、HTML 导出运行时）我们**能**显式传 URL，
+所以在 `page/full/src/nas.ts` 里按 `document.baseURI` 算成**绝对地址**指向共享的 `../assets/` ✓
 
 ---
 
@@ -43,55 +49,76 @@
 |---|---|
 | `fpk/cadviewer/` | 应用源码（`fnpack create` 生成后改造） |
 | `fpk/cadviewer/manifest` | 应用配置（含 `micro_app=true` ← **JS SDK 必需**） |
-| `fpk/cadviewer/config/resource` | 开放 API 声明：`trim.file.userAccess` |
-| `fpk/cadviewer/app/ui/config` | 入口（CGI 轻量入口，`type=iframe` 走桌面窗口） |
-| `fpk/cadviewer/app/ui/index.cgi` | CGI 静态服务（基础目录从脚本位置推导） |
-| `fpk/cadviewer/app/ui/www/` | 前端页面（P0 只有诊断页；后续放简易版 + 完整版） |
+| `fpk/cadviewer/config/resource` | 开放 API 声明：`trim.file.userAccess` / `trim.file.userAcl` |
+| `fpk/cadviewer/app/ui/config` | **两个入口**（桌面图标 → `/full/`，右键 → 简易版） |
+| `fpk/cadviewer/app/ui/index.cgi` | CGI：静态服务 + `/api/raw`（读图纸）+ `/api/diag`（诊断）+ `/api/acl` |
+| `page/` | 前端源码（**一次构建出两个页面**，共用一份 `pnpm-lock.yaml`） |
+| `page/index.html` + `page/src/` | 简易版（上游 `cad-simple-viewer-example` 改造） |
+| `page/full/` | 完整版（上游 `cad-viewer-example` 改造，MIT，见 `page/full/LICENSE`） |
+| `tools/localtest.py` | **本地端到端测试服务器**（真的跑 `index.cgi`） |
+| `tools/headless_check.py` | 用 CDP 真实时间驱动 headless Chrome：截图 + 抓控制台 |
 | `fpk/tools/fnpack.exe` | 官方打包工具 |
-| `p0/` | P0 页面的源码（纯 JS，**刻意不引入打包器**） |
+| `fpk/build.py` / `page/build.py` / `fpk/tools/release.py` | 打包 / 前端构建同步 / 发版 |
+| `p0/` | P0 验证页面（历史，已不再使用） |
 
-**打包**：
+---
+
+## 构建
 
 ```bash
-cd fpk && ./tools/fnpack.exe build -d cadviewer
+# 1. 前端（构建 + 同步进 www/）
+cd page && pnpm install          # 只在依赖变动时跑一次
+cd .. && python page/build.py
+
+# 2. 打包 .fpk（含自检）
+python fpk/build.py
+
+# 3. 发版（建 tag + Release + 传资产）
+python fpk/tools/release.py 0.4.0
 ```
 
 ---
 
-## 关键实现说明
+## 本地测试（**改完先在本地跑**）
 
-### 为什么用 CGI 而不是容器
+```bash
+python tools/localtest.py --prepare-sample   # 在 Git Bash 根下造一张 /vol1 下的示例图纸
+python tools/localtest.py --port 8899        # 起服务器（静态 + 真的跑 index.cgi）
+# 浏览器打开：
+#   http://127.0.0.1:8899/cgi/ThirdParty/cadviewer/index.cgi/full/index.html
+#   http://127.0.0.1:8899/cgi/ThirdParty/cadviewer/index.cgi/index.html
 
-P0 只需要「一个静态页面 + 调 JS SDK」—— CGI 轻量入口正好：
-飞牛会在调用前**校验 NAS 登录态**，不需要常驻进程，也不需要统一网关。
-（后续要服务端能力时再换网关 + 容器。）
+# 无人值守：截图 + 抓控制台（CDP，真实时间）
+pip install websocket-client
+python tools/headless_check.py \
+  --url "http://127.0.0.1:8899/cgi/ThirdParty/cadviewer/index.cgi/full/index.html?path=/vol1/1000/ssd/test/block-color.dxf" \
+  --wait 120 --shot out.png
+```
 
-### 为什么 `micro_app=true` 必须写
+> ⚠️ **不要用 `--virtual-time-budget`** ✗ —— 虚拟时钟飞快前进，会让库里的
+> 「解析超时」在真实工作还没做完时就触发，于是报「无法打开…超时」，
+> 而其实根本没超时（已验证可用的简易版在同样参数下也会「失败」）。
+> 判断测法是否可信的办法：**拿一个已知能用的东西做对照组** ✓
+>
+> ⚠️ 本地跑得**慢**（CGI 每个请求都要起一个 bash 进程）→ 等 100~120 秒再看结果，
+> 30 秒往往会误判成「打不开」。
 
-官方文档明确：
-
-> 未声明 `micro_app=true` 时，应用页面**不会按微应用环境加载**，JS SDK 相关能力**可能无法初始化**。
-
-### 为什么 P0 不用打包器
-
-`@trimjs/web-app` 的 ESM 产物（`dist/index.js`）**既无裸导入、也无相对导入** ——
-浏览器可以直接 `import`。P0 刻意不引入 vite/esbuild，少一层可能出错的地方
-（真机上构建工具链还踩过 postinstall 被沙箱拦截的坑）。
-
-### 权限怎么保证
-
-**不自己实现**：路径只能来自 `pickUserFile` 的返回值（或已授权目录内的列举结果）。
-官方文档也注明：「页面路由只负责打开页面，**不会替应用完成文件授权或权限判断**」。
+**本地验不了的部分**：飞牛 JS SDK（`pickUserFile` / `openAppAuth`）—— 只能在真机上验 ✓
 
 ---
 
-## 后续计划（P0 验证通过后）
+## 权限怎么保证
 
-| 期 | 内容 |
-|---|---|
-| **P1** | 独立应用骨架 + 两个入口（简易/完整）+ 桌面图标 + 本地文件 |
-| **P2** | NAS 浏览（目录授权 + 列目录）+ 与 FileView 应用的交接 |
-| **P3** | 打磨：工具栏、主题、大图性能 |
+**不自己实现目录浏览**：路径只能来自官方 `pickUserFile` 的返回值（选完系统会自动把该文件
+授权给本应用）✓。官方文档也注明：「页面路由只负责打开页面，**不会替应用完成文件授权或
+权限判断**」。
 
-> 体积预估：字体 54 MB + WASM 9 MB 是两个界面**共用**的 →
-> 整体约 58 MB（若拆成两个应用则要 113 MB，所以必须是一个应用两个入口）。
+已知的边界（详见 `fpk/cadviewer/app/ui/index.cgi` 里的注释与技能文档）：
+
+- 框架的文件授权是给文件加一条 **`group:<应用组>:r--`** ACL（给**应用**的，不是给具体用户的）
+- 「桌面访问 = 仅管理员」**只控制桌面图标给谁看**，**不是 URL 的访问控制** ✗
+- ⚠️ **飞牛不用 mode/ACL 判权限** ✗ —— 用它们判必然判错，所以 `index.cgi` 里那个
+  `can_read_as` **保持 `log` 模式、不要启用 `enforce`**
+- 正规做法是后端 API `trim.file.checkUserACL`，但它需要 `TRIM_API_TOKEN`，
+  而**CGI 拿不到**（实测：token 只注入给 `cmd/main` 这类应用脚本；Unix Socket 也是 root `rw----`）
+  → 要做只能加一个 `cmd/main` 服务（架构级改动），见 `0.3.0` 的结论

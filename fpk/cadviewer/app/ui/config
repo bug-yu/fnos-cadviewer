@@ -5,7 +5,7 @@
       "icon": "images/icon_{0}.png",
       "type": "url",
       "microApp": true,
-      "url": "/cgi/ThirdParty/cadviewer/index.cgi/index.html",
+      "url": "/cgi/ThirdParty/cadviewer/index.cgi/full/index.html",
       "allUsers": true
     },
     "cadviewer.view": {

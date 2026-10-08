@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import vue from '@vitejs/plugin-vue'
 import { defineConfig, type PluginOption } from 'vite'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
@@ -56,6 +57,22 @@ function viewerManualChunk(id: string): string | undefined {
   if (path.includes('/@mlightcad/cad-simple-viewer/')) {
     return 'cad-simple-viewer'
   }
+  // ── 完整版（桌面图标入口）用的 Vue 那一套 ────────────────────────────────
+  // 单独切块，别把 element-plus（体积最大）塞进任何 CAD chunk 里。
+  if (path.includes('/node_modules/element-plus/') || path.includes('/node_modules/.pnpm/element-plus@')) {
+    return 'element-plus'
+  }
+  if (
+    path.includes('/node_modules/vue/') ||
+    path.includes('/node_modules/@vue/') ||
+    path.includes('/node_modules/.pnpm/vue@') ||
+    path.includes('/node_modules/.pnpm/@vue+') ||
+    path.includes('/vue-i18n/') ||
+    path.includes('/@vueuse/') ||
+    path.includes('/node_modules/lodash-es/')
+  ) {
+    return 'vue-vendor'
+  }
 }
 
 const viewerRuntimeSrc = resolve(
@@ -87,7 +104,13 @@ export default defineConfig(({ mode }) => ({
     modulePreload: false,
     rollupOptions: {
       input: {
+        // 简易版 —— 文件管理器右键预览用（桌面窗口 iframe 里）
         main: resolve(__dirname, 'index.html'),
+        // 完整版 —— 桌面图标用（Vue 3 + 菜单/功能区/命令行/状态栏）
+        full: resolve(__dirname, 'full/index.html'),
+        // 完整版的 openAppAuth 回调页（必须与 full/index.html 同目录：
+        // redirectUri 是按当前页面路径推算的绝对路径，见 full/src/nas.ts）
+        fullCallback: resolve(__dirname, 'full/callback.html'),
         // 飞牛 openAppAuth 的授权回调页（独立浏览器环境用）
         callback: resolve(__dirname, 'callback.html')
       },
@@ -97,6 +120,7 @@ export default defineConfig(({ mode }) => ({
     }
   },
   plugins: [
+    vue(),
     viteStaticCopy({
       targets: [
         {

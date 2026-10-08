@@ -6,13 +6,15 @@
 fpk/tools/fnpack.exe
 fpk/tools/fnpack
 
-# ===== CAD 页面资源（约 79 MB，不进仓库）=====
+# ===== CAD 页面资源（约 80 MB，不进仓库）=====
 # 这些是「构建产物」：
-#   · assets/       完整版 cad-viewer 的产物（含 9.5 MB 的 LibreDWG WASM）
-#   · cad-data/     mlightcad/cad-data 的克隆（86 个 SHX 字体等，54 MB）
-# 由 fpk/build.py 或 fpk/cad-viewer 的构建流程生成 / 从上游拉取
+#   · assets/       两个页面共用的 JS/worker/wasm（含 9.5 MB 的 LibreDWG WASM）
+#   · cad-data/     mlightcad/cad-data 的克隆（101 个字体文件等，54 MB）
+#   · full/         完整版页面产物（页面 + 它自己那份 1.2 MB 的 MTEXT worker）
+# 由 page/build.py 生成 / 从上游拉取
 fpk/cadviewer/app/ui/www/assets/
 fpk/cadviewer/app/ui/www/cad-data/
+fpk/cadviewer/app/ui/www/full/
 # 第三方 SDK（@trimjs/web-app 的 ESM 产物，115 KB）—— 也从 npm 拷，不手改
 fpk/cadviewer/app/ui/www/vendor/
 

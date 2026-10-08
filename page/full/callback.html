@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>授权结果</title>
+  <style>
+    body { margin: 0; padding: 24px; font: 14px/1.7 system-ui, "Microsoft YaHei", sans-serif; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px;
+          font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+    .ok { color: #059669; font-weight: 600; }
+    .bad { color: #dc2626; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>授权结果</h1>
+  <p id="msg">正在处理…</p>
+  <pre id="raw"></pre>
+
+  <script type="module">
+    // 飞牛 openAppAuth 的回调页（完整版用）。
+    //
+    // 流程：完整版页面调 openAppAuth('pickUserFile', {redirectUri: '<base>callback.html', state})
+    //   → 系统弹授权页 → 用户选完 → 跳回本页（带授权结果）
+    //   → 本页解析结果，用 postMessage 送回**原页面**，然后关掉自己 ✓
+    //
+    // ⚠️ redirectUri 必须是**绝对路径**（相对 URL 会被解析成站点根 → 404）。
+    //    所以这里放的是 `full/callback.html`（与 `full/index.html` 同目录），
+    //    由 `nas.ts` 按当前页面路径推算出来 ✓
+    //
+    // ⚠️ 官方文档提到：部分环境（移动端/平板浏览器）里 window.opener 可能不存在，
+    //    那时回调页无法通知原页面 —— 所以这里**同时把结果打印在页面上**，
+    //    实在不行让用户手动把路径复制回去 ✓
+    import { TrimApp } from '@trimjs/web-app'
+
+    const msg = document.getElementById('msg')
+    const raw = document.getElementById('raw')
+
+    try {
+      const sdk = new TrimApp()
+      const result = sdk.parseAppAuthCallback(window.location.href)
+      raw.textContent = JSON.stringify(result, null, 2)
+
+      // 结果结构未知（文档没写全）→ 尽量兜几种可能的形状
+      const data =
+        (result && (result.data || result.paths || result.path || result.files)) || null
+      let path = Array.isArray(data) ? data[0] : typeof data === 'string' ? data : null
+
+      // 再兜一层：直接从 URL 查询串里找（真机上回调地址是
+      // …/callback.html?status=success&method=pickUserFile&state=…&<可能带路径>）
+      const q = new URLSearchParams(window.location.search)
+      if (!path) {
+        path =
+          q.get('filePath') || q.get('path') || q.get('file') || q.get('data') || null
+      }
+
+      if (path) {
+        msg.innerHTML = `<span class="ok">✓ 已拿到路径</span>：${path}`
+      } else {
+        msg.innerHTML = '<span class="bad">没解析出路径</span>（见下面的原始结果）'
+      }
+
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(
+          { type: 'cadviewer-auth', path: path || null, state: result && result.state, raw: result },
+          window.location.origin
+        )
+        setTimeout(() => window.close(), 600)
+      } else {
+        msg.innerHTML +=
+          '<br>⚠️ 没有 window.opener，无法自动送回原页面 —— 请把上面的路径复制回原窗口。'
+      }
+    } catch (e) {
+      msg.innerHTML = `<span class="bad">解析失败</span>：${e}`
+      raw.textContent = String(e && e.stack ? e.stack : e)
+    }
+  </script>
+</body>
+</html>
