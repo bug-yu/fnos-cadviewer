@@ -83,6 +83,24 @@ if [ "$REL_PATH" = "/api/diag" ]; then
     echo "getfacl      : $(command -v getfacl >/dev/null 2>&1 && getfacl -p "$P" 2>&1 | tr '\n' '|' || echo '(无 getfacl)')"
     echo "读前 16 字节  : $(head -c 16 "$P" 2>&1 | od -An -tx1 | head -1)"
   fi
+  echo
+  # ⚠️ 关键：框架到底有没有告诉 CGI「当前是哪个用户」？
+  #    TRIM_* 是空的（真机实测），所以身份可能走 CGI 标准变量或某个头。
+  #    这段是给"要不要自己做权限判定"提供依据的 ✓
+  echo "== CGI 标准变量 / 身份相关 =="
+  for v in REMOTE_USER REMOTE_ADDR AUTH_TYPE REQUEST_METHOD REQUEST_URI QUERY_STRING \
+           CONTENT_TYPE SERVER_PROTOCOL GATEWAY_INTERFACE SCRIPT_NAME PATH_INFO \
+           HTTP_X_TRIM_USERID HTTP_X_TRIM_USERNAME HTTP_X_FORWARDED_USER HTTP_X_USERID; do
+    eval "val=\$$v"
+    echo "  ${v} = ${val:-(未设置)}"
+  done
+  echo
+  echo "== 环境里与 trim/user/uid 相关的 =="
+  env | grep -iE "trim|user|uid|acl" | sort | head -30
+  echo
+  echo "== 能力集（看有没有绕过文件权限的 capability）=="
+  echo "  capsh    : $(command -v capsh >/dev/null 2>&1 && capsh --print 2>&1 | grep -iE 'current|bounding' | head -3 || echo '(无 capsh)')"
+  echo "  status   : $(grep -E 'CapEff|CapBnd' /proc/self/status 2>/dev/null | tr '\n' ' ' || echo '(读不到 /proc)')"
   exit 0
 fi
 
