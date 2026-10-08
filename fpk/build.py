@@ -54,11 +54,16 @@ def check():
 
     with tarfile.open(fileobj=io.BytesIO(app), mode="r:gz") as t2:
         inner = [m.name for m in t2.getmembers() if m.isfile()]
-    for k in ("ui/config", "ui/index.cgi", "ui/www/index.html", "ui/www/app.js",
-              "ui/www/vendor/trimjs/index.js"):
-        hit = any(nm.endswith(k) for nm in inner)
-        print("  含 %-30s: %s" % (k, "✓" if hit else "✗"))
+    for k in ("ui/config", "ui/index.cgi", "ui/www/index.html",
+              "ui/www/assets/libredwg-web.wasm",
+              "ui/www/cad-data/fonts"):
+        hit = any(nm.endswith(k) or k in nm for nm in inner)
+        print("  含 %-34s: %s" % (k, "✓" if hit else "✗"))
         ok &= hit
+    fonts = [nm for nm in inner if "cad-data/fonts/" in nm]
+    print("  字体文件数（应 >= 80）             : %d %s"
+          % (len(fonts), "✓" if len(fonts) >= 80 else "✗"))
+    ok &= len(fonts) >= 80
 
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []

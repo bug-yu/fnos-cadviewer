@@ -1,13 +1,22 @@
 # ===== 构建产物 =====
-# 安装包是构建产物，不进仓库；用 fpk/tools/fnpack.exe build -d cadviewer 生成
+# 安装包是构建产物，不进仓库；用 fpk/build.py 生成
 *.fpk
 
 # ===== 打包工具二进制 =====
 fpk/tools/fnpack.exe
 fpk/tools/fnpack
 
+# ===== CAD 页面资源（约 79 MB，不进仓库）=====
+# 这些是「构建产物」：
+#   · assets/       完整版 cad-viewer 的产物（含 9.5 MB 的 LibreDWG WASM）
+#   · cad-data/     mlightcad/cad-data 的克隆（86 个 SHX 字体等，54 MB）
+# 由 fpk/build.py 或 fpk/cad-viewer 的构建流程生成 / 从上游拉取
+fpk/cadviewer/app/ui/www/assets/
+fpk/cadviewer/app/ui/www/cad-data/
+# 第三方 SDK（@trimjs/web-app 的 ESM 产物，115 KB）—— 也从 npm 拷，不手改
+fpk/cadviewer/app/ui/www/vendor/
+
 # ===== 前端依赖 =====
-# P0 页面刻意不用打包器，但源码目录仍保留 npm 项目（方便以后需要时切换）
 p0/node_modules/
 p0/package-lock.json
 

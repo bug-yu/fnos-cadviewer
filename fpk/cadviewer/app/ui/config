@@ -3,9 +3,19 @@
     "cadviewer.Application": {
       "title": "CAD 查看器",
       "icon": "images/icon_{0}.png",
+      "type": "url",
+      "microApp": true,
+      "url": "/cgi/ThirdParty/cadviewer/index.cgi/index.html",
+      "allUsers": true
+    },
+    "cadviewer.view": {
+      "title": "用 CAD 查看器打开",
+      "icon": "images/icon_{0}.png",
       "type": "iframe",
       "microApp": true,
-      "url": "/cgi/ThirdParty/cadviewer/index.cgi/",
+      "url": "/cgi/ThirdParty/cadviewer/index.cgi/index.html",
+      "fileTypes": ["dwg", "dxf"],
+      "noDisplay": true,
       "allUsers": true
     }
   }
