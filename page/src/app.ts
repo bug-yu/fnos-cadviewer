@@ -818,12 +818,17 @@ export class CadViewerApp {
       if (sdk.isStandaloneWeb === true) {
         this.authState = Math.random().toString(36).slice(2)
         sessionStorage.setItem('cadviewer.authState', this.authState)
+        // ⚠️ redirectUri 必须是**绝对路径** ✗ —— 用 './callback.html' 会被解析成
+        //    站点根 `/callback.html` → 404（真机踩到：跳过去是飞牛的 404 页）
+        //    这里按**当前页面路径**推算，部署到任何前缀下都对 ✓
+        //    （页面在 …/index.cgi/index.html → 回调 …/index.cgi/callback.html）
+        const base = location.pathname.replace(/[^/]*$/, '')
         await sdk.openAppAuth(
           'pickUserFile',
           {
             appName: 'cadviewer',
             directory: false,
-            redirectUri: './callback.html',
+            redirectUri: `${base}callback.html`,
             state: this.authState
           },
           { target: '_blank', features: 'width=750,height=630' }

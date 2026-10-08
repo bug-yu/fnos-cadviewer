@@ -41,7 +41,15 @@
       // 结果结构未知（文档没写全）→ 尽量兜几种可能的形状
       const data =
         (result && (result.data || result.paths || result.path || result.files)) || null
-      const path = Array.isArray(data) ? data[0] : typeof data === 'string' ? data : null
+      let path = Array.isArray(data) ? data[0] : typeof data === 'string' ? data : null
+
+      // 再兜一层：直接从 URL 查询串里找（真机上回调地址是
+      // …/callback.html?status=success&method=pickUserFile&state=…&<可能带路径>）
+      const q = new URLSearchParams(window.location.search)
+      if (!path) {
+        path =
+          q.get('filePath') || q.get('path') || q.get('file') || q.get('data') || null
+      }
 
       if (path) {
         msg.innerHTML = `<span class="ok">✓ 已拿到路径</span>：${path}`
