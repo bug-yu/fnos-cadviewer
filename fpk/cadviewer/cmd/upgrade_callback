@@ -18,4 +18,10 @@ mkdir -p "${TRIM_PKGVAR}" 2>/dev/null
 
 find "${TRIM_APPDEST}/ui" -maxdepth 1 -name '*.cgi' -exec chmod +x {} \; 2>/dev/null
 
+# 权限守卫配置：升级时若不存在就补上（已存在则保留用户的设置 ✓）
+CONF="${TRIM_APPDEST}/raw-guard.conf"
+if [ ! -f "$CONF" ]; then
+  printf 'log\n' > "$CONF" && chmod 644 "$CONF" && echo "  创建 ${CONF}（log 模式）" >> "$LOG" 2>/dev/null
+fi
+
 exit 0

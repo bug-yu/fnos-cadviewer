@@ -33,4 +33,15 @@ mkdir -p "${TRIM_PKGVAR}" 2>/dev/null
 # 兜底：ui 目录下所有 .cgi 都补上（以后加别的 CGI 也不用改这里）
 find "${TRIM_APPDEST}/ui" -maxdepth 1 -name '*.cgi' -exec chmod +x {} \; 2>/dev/null
 
+# ── 创建 /api/raw 的权限守卫配置（只创建，不覆盖）──────────────────────────
+# 背景：框架的文件授权是给文件加一条 `group:<应用组>:r--` ——
+#   那是给**应用**的，不是给具体用户的 ✗ → 用户 B 可能读到用户 A 授权过的文件 ✗
+# 所以 /api/raw 会按「请求者 uid」再判一道，模式由这个文件决定：
+#   log     （默认）只记到 /tmp/cadviewer-raw-guard.log，不拦截 ✓
+#   enforce 判定不通过就返回 403 ✓
+CONF="${TRIM_APPDEST}/raw-guard.conf"
+if [ ! -f "$CONF" ]; then
+  printf 'log\n' > "$CONF" && chmod 644 "$CONF" && echo "  创建 ${CONF}（log 模式）" >> "$LOG" 2>/dev/null
+fi
+
 exit 0

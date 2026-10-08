@@ -93,11 +93,14 @@ can_read_as() {
   if [ -z "$acl" ]; then acl=$(getfacl "$path" 2>/dev/null | grep -v '^#'); fi
   local a_user="" a_group="" a_other="" a_mask="" a_named_user="" a_named_group=""
   if [ -n "$acl" ]; then
-    a_user=$(printf '%s\n' "$acl" | awk -F: '$1=="user"&&$2==""{print $3; exit}')
-    a_group=$(printf '%s\n' "$acl" | awk -F: '$1=="group"&&$2==""{print $3; exit}')
-    a_other=$(printf '%s\n' "$acl" | awk -F: '$1=="other"{print $3; exit}')
-    a_mask=$(printf '%s\n' "$acl" | awk -F: '$1=="mask"{print $3; exit}')
-    a_named_user=$(printf '%s\n' "$acl" | awk -F: -v u="$uid" '$1=="user"&&$2==u{print $3; exit}')
+    # ⚠️ getfacl 会给某些条目追加 `#effective:---` 注释（**制表符**分隔）✗ ——
+    #    必须只取权限位本身（真机踩到：解析出来是 "--x\t#effective" ✗）
+    #    用 awk 的 sub() 去掉第一个空白之后的所有内容 ✓
+    a_user=$(printf '%s\n' "$acl" | awk -F: '$1=="user"&&$2==""{$3=$3; sub(/[ \t].*/,"",$3); print $3; exit}')
+    a_group=$(printf '%s\n' "$acl" | awk -F: '$1=="group"&&$2==""{sub(/[ \t].*/,"",$3); print $3; exit}')
+    a_other=$(printf '%s\n' "$acl" | awk -F: '$1=="other"{sub(/[ \t].*/,"",$3); print $3; exit}')
+    a_mask=$(printf '%s\n' "$acl" | awk -F: '$1=="mask"{sub(/[ \t].*/,"",$3); print $3; exit}')
+    a_named_user=$(printf '%s\n' "$acl" | awk -F: -v u="$uid" '$1=="user"&&$2==u{sub(/[ \t].*/,"",$3); print $3; exit}')
     cr_d "ACL" "user::${a_user} group::${a_group} mask::${a_mask} other::${a_other}"
     cr_d "ACL 命名" "user:${uid}:${a_named_user:-无}"
   else
@@ -237,6 +240,31 @@ if [ "$REL_PATH" = "/api/raw" ]; then
     send_status "403 Forbidden" "没有读取权限：$P"
     exit 0
   fi
+
+  # ── 按「请求者 uid」再判一道 ────────────────────────────────────────────
+  # 为什么需要：框架的授权是给文件加一条 `group:<应用组>:r--` ✓ ——
+  #   那是**给应用**的，不是给具体用户的 ✗
+  #   → 用户 B 有可能读到用户 A 授权过的文件（应用身份相同）✗
+  # 模式由 ${SELF_DIR}/../raw-guard.conf 决定：
+  #   log（默认，只记不拦）/ enforce（拦截）
+  GUARD_CONF="${SELF_DIR}/../raw-guard.conf"
+  GUARD_MODE="$(tr -d '[:space:]' < "$GUARD_CONF" 2>/dev/null)"
+  [ -z "$GUARD_MODE" ] && GUARD_MODE="log"
+  RUID="${HTTP_X_TRIM_USERID:-}"
+  can_read_as "$RUID" "$P"
+  _rc=$?
+  if [ "$_rc" != 0 ]; then
+    if [ "$_rc" = 2 ]; then _why="无法判定（拿不到 uid 或读不到元数据）"; else _why="不可读"; fi
+    if [ "$GUARD_MODE" = "enforce" ]; then
+      send_status "403 Forbidden" "没有权限读取这个文件（uid=${RUID:-未知}：${_why}）"
+      exit 0
+    fi
+    # log 模式：只记录（写到 /tmp，因为应用目录通常不可写）
+    printf '%s\tmode=%s\tuid=%s\twhy=%s\tpath=%s\n' \
+      "$(date '+%F %T')" "$GUARD_MODE" "${RUID:-未知}" "$_why" "$P" \
+      >> "/tmp/cadviewer-raw-guard.log" 2>/dev/null
+  fi
+
   SIZE="$(stat -c '%s' "$P" 2>/dev/null)"
   echo "Content-Type: application/octet-stream"
   [ -n "$SIZE" ] && echo "Content-Length: $SIZE"
