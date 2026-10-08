@@ -60,22 +60,37 @@ send_status() {
 # 为什么需要：真机实测**应用进程能读到不属于它的文件**（详情见技能），
 # 而「桌面访问」设置**不保护 URL** ✗ —— 所以后端要自己判。
 # 返回：0 可读 / 1 不可读 / 2 无法判定
+#
+# 判定过程的中间值记在 CR_DEBUG 里，供 /api/diag 打印（真机排查用）。
+# ⚠️ 记录函数必须定义在**外面** —— bash 里不能写 `local _d() {…}`（语法错误 ✗）
+CR_DEBUG=""
+cr_d() {
+  CR_DEBUG="${CR_DEBUG}      $1 = $2
+"
+}
+
 can_read_as() {
   local uid="$1" path="$2"
-  [ -n "$uid" ] || return 2
+  CR_DEBUG=""
+
+  [ -n "$uid" ] || { cr_d "结果" "拿不到 uid"; return 2; }
   local owner grp
-  owner=$(stat -c '%u' "$path" 2>/dev/null) || return 2
-  grp=$(stat -c '%g' "$path" 2>/dev/null) || return 2
+  owner=$(stat -c '%u' "$path" 2>/dev/null) || { cr_d "结果" "stat %u 失败"; return 2; }
+  grp=$(stat -c '%g' "$path" 2>/dev/null) || { cr_d "结果" "stat %g 失败"; return 2; }
 
   # ① 先用权限位算基线（owner / group / other）
   #    用 %A 的符号形式（-rwx--x--x），比 %a 好解析，也不用管 setuid 那一位
   local sym
-  sym=$(stat -c '%A' "$path" 2>/dev/null) || return 2
+  sym=$(stat -c '%A' "$path" 2>/dev/null) || { cr_d "结果" "stat %A 失败"; return 2; }
   local m_owner="${sym:1:3}" m_group="${sym:4:3}" m_other="${sym:7:3}"
+  cr_d "owner/组" "${owner}/${grp}"
+  cr_d "权限位" "${sym}  →  owner=${m_owner} group=${m_group} other=${m_other}"
 
   # ② 有扩展 ACL 就用 ACL 覆盖（命名条目优先）
+  #    ⚠️ getfacl 的参数在各发行版不一致（有的不认 -c ✗）→ 两种都试一遍
   local acl=""
-  acl=$(getfacl -c "$path" 2>/dev/null) || acl=""
+  acl=$(getfacl -c "$path" 2>/dev/null)
+  if [ -z "$acl" ]; then acl=$(getfacl "$path" 2>/dev/null | grep -v '^#'); fi
   local a_user="" a_group="" a_other="" a_mask="" a_named_user="" a_named_group=""
   if [ -n "$acl" ]; then
     a_user=$(printf '%s\n' "$acl" | awk -F: '$1=="user"&&$2==""{print $3; exit}')
@@ -83,16 +98,21 @@ can_read_as() {
     a_other=$(printf '%s\n' "$acl" | awk -F: '$1=="other"{print $3; exit}')
     a_mask=$(printf '%s\n' "$acl" | awk -F: '$1=="mask"{print $3; exit}')
     a_named_user=$(printf '%s\n' "$acl" | awk -F: -v u="$uid" '$1=="user"&&$2==u{print $3; exit}')
+    cr_d "ACL" "user::${a_user} group::${a_group} mask::${a_mask} other::${a_other}"
+    cr_d "ACL 命名" "user:${uid}:${a_named_user:-无}"
+  else
+    cr_d "ACL" "（getfacl 没输出，按权限位判）"
   fi
 
-  local perm=""
+  local perm="" which=""
   if [ "$uid" = "$owner" ]; then
-    perm="${a_user:-$m_owner}"
+    perm="${a_user:-$m_owner}"; which="owner"
   elif [ -n "$a_named_user" ]; then
-    perm="$a_named_user"
+    perm="$a_named_user"; which="命名用户条目"
   else
     local gs g
     gs=" $(id -G "$uid" 2>/dev/null | tr '\n' ' ') "
+    cr_d "该用户组" "$gs"
     if [ -n "$acl" ]; then
       for g in $gs; do
         a_named_group=$(printf '%s\n' "$acl" | awk -F: -v g="$g" '$1=="group"&&$2==g{print $3; exit}')
@@ -100,20 +120,27 @@ can_read_as() {
       done
     fi
     if [ -n "$a_named_group" ]; then
-      perm="$a_named_group"
+      perm="$a_named_group"; which="命名组条目"
     elif printf '%s' "$gs" | grep -q " $grp "; then
-      perm="${a_group:-$m_group}"
+      perm="${a_group:-$m_group}"; which="group::（本组）"
     else
-      perm="${a_other:-$m_other}"
+      perm="${a_other:-$m_other}"; which="other::"
     fi
   fi
+  cr_d "取用哪一项" "$which"
+  cr_d "该项权限" "${perm:-（空）}"
 
-  [ -n "$perm" ] || return 2
-  case "$perm" in *r*) ;; *) return 1 ;; esac
-  # 非 owner 且存在 mask 时，还要过 mask
-  if [ -n "$a_mask" ] && [ "$uid" != "$owner" ]; then
-    case "$a_mask" in *r*) ;; *) return 1 ;; esac
+  [ -n "$perm" ] || { cr_d "结果" "权限为空 → 无法判定"; return 2; }
+  case "$perm" in *r*) ;; *) cr_d "结果" "该项无 r → 不可读"; return 1 ;; esac
+  # ⚠️ mask 只约束「命名条目」和「group::」✗ —— **不约束 other** ✓
+  #    （之前的版本对所有非 owner 情况都过 mask，语义不对 ✗）
+  if [ -n "$a_mask" ] && [ "$which" != "other::" ] && [ "$which" != "owner" ]; then
+    case "$a_mask" in
+      *r*) ;;
+      *) cr_d "结果" "mask 无 r → 不可读"; return 1 ;;
+    esac
   fi
+  cr_d "结果" "可读"
   return 0
 }
 
@@ -157,7 +184,10 @@ if [ "$REL_PATH" = "/api/diag" ]; then
     echo "   该用户的组    : $([ -n "$RUID" ] && id -G "$RUID" 2>&1 || echo '-')"
     echo "   文件 owner/组 : $(stat -c 'uid=%u gid=%g' "$P" 2>&1)"
     can_read_as "$RUID" "$P"
-    case $? in
+    _rc=$?
+    echo "   -- 判定过程（中间值）--"
+    printf '%s' "$CR_DEBUG" | sed 's/^/   /'
+    case $_rc in
       0) echo "   ★ 判定结果    : **可读** ✓（应放行）" ;;
       1) echo "   ★ 判定结果    : **不可读** ✗（应拒绝 403）" ;;
       *) echo "   ★ 判定结果    : **无法判定**（按策略应拒绝）" ;;
