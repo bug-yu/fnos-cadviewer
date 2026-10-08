@@ -42,6 +42,13 @@ qget() {
   return 1
 }
 
+# 目标路径参数：**页面用的是 `filePath`**（沿用 FileView 那套页面的补丁），
+# 同时接受 `path`（我们自己的诊断页/手工调用更顺手）。
+# ⚠️ 0.2.0 只认 `path` → 右键预览报「缺少 path 参数」✗（真机踩到）
+qget_path() {
+  qget filePath || qget path
+}
+
 send_status() {
   echo "Status: $1"
   echo "Content-Type: text/plain; charset=utf-8"
@@ -51,7 +58,7 @@ send_status() {
 
 # ── API: /api/diag —— 诊断（回答「后端到底能不能读别人的文件」）────────────
 if [ "$REL_PATH" = "/api/diag" ]; then
-  P="$(qget path || true)"
+  P="$(qget_path || true)"
   echo "Content-Type: text/plain; charset=utf-8"
   echo "Cache-Control: no-store"
   echo ""
@@ -81,7 +88,7 @@ fi
 
 # ── API: /api/raw —— 读文件（给查看器）──────────────────────────────────────
 if [ "$REL_PATH" = "/api/raw" ]; then
-  P="$(qget path || true)"
+  P="$(qget_path || true)"
   if [ -z "$P" ]; then
     send_status "400 Bad Request" "缺少 path 参数"
     exit 0
