@@ -56,6 +56,67 @@ send_status() {
   echo "$2"
 }
 
+# ── 权限判定：某 uid 对某路径是否可读（模仿内核的判定顺序）─────────────────
+# 为什么需要：真机实测**应用进程能读到不属于它的文件**（详情见技能），
+# 而「桌面访问」设置**不保护 URL** ✗ —— 所以后端要自己判。
+# 返回：0 可读 / 1 不可读 / 2 无法判定
+can_read_as() {
+  local uid="$1" path="$2"
+  [ -n "$uid" ] || return 2
+  local owner grp
+  owner=$(stat -c '%u' "$path" 2>/dev/null) || return 2
+  grp=$(stat -c '%g' "$path" 2>/dev/null) || return 2
+
+  # ① 先用权限位算基线（owner / group / other）
+  #    用 %A 的符号形式（-rwx--x--x），比 %a 好解析，也不用管 setuid 那一位
+  local sym
+  sym=$(stat -c '%A' "$path" 2>/dev/null) || return 2
+  local m_owner="${sym:1:3}" m_group="${sym:4:3}" m_other="${sym:7:3}"
+
+  # ② 有扩展 ACL 就用 ACL 覆盖（命名条目优先）
+  local acl=""
+  acl=$(getfacl -c "$path" 2>/dev/null) || acl=""
+  local a_user="" a_group="" a_other="" a_mask="" a_named_user="" a_named_group=""
+  if [ -n "$acl" ]; then
+    a_user=$(printf '%s\n' "$acl" | awk -F: '$1=="user"&&$2==""{print $3; exit}')
+    a_group=$(printf '%s\n' "$acl" | awk -F: '$1=="group"&&$2==""{print $3; exit}')
+    a_other=$(printf '%s\n' "$acl" | awk -F: '$1=="other"{print $3; exit}')
+    a_mask=$(printf '%s\n' "$acl" | awk -F: '$1=="mask"{print $3; exit}')
+    a_named_user=$(printf '%s\n' "$acl" | awk -F: -v u="$uid" '$1=="user"&&$2==u{print $3; exit}')
+  fi
+
+  local perm=""
+  if [ "$uid" = "$owner" ]; then
+    perm="${a_user:-$m_owner}"
+  elif [ -n "$a_named_user" ]; then
+    perm="$a_named_user"
+  else
+    local gs g
+    gs=" $(id -G "$uid" 2>/dev/null | tr '\n' ' ') "
+    if [ -n "$acl" ]; then
+      for g in $gs; do
+        a_named_group=$(printf '%s\n' "$acl" | awk -F: -v g="$g" '$1=="group"&&$2==g{print $3; exit}')
+        [ -n "$a_named_group" ] && break
+      done
+    fi
+    if [ -n "$a_named_group" ]; then
+      perm="$a_named_group"
+    elif printf '%s' "$gs" | grep -q " $grp "; then
+      perm="${a_group:-$m_group}"
+    else
+      perm="${a_other:-$m_other}"
+    fi
+  fi
+
+  [ -n "$perm" ] || return 2
+  case "$perm" in *r*) ;; *) return 1 ;; esac
+  # 非 owner 且存在 mask 时，还要过 mask
+  if [ -n "$a_mask" ] && [ "$uid" != "$owner" ]; then
+    case "$a_mask" in *r*) ;; *) return 1 ;; esac
+  fi
+  return 0
+}
+
 # ── API: /api/diag —— 诊断（回答「后端到底能不能读别人的文件」）────────────
 if [ "$REL_PATH" = "/api/diag" ]; then
   P="$(qget_path || true)"
@@ -80,8 +141,27 @@ if [ "$REL_PATH" = "/api/diag" ]; then
     echo "-r           : $([ -r "$P" ] && echo yes || echo no)"
     echo "ls -ld       : $(ls -ld "$P" 2>&1)"
     echo "stat         : $(stat -c 'mode=%a owner=%U:%G size=%s' "$P" 2>&1)"
-    echo "getfacl      : $(command -v getfacl >/dev/null 2>&1 && getfacl -p "$P" 2>&1 | tr '\n' '|' || echo '(无 getfacl)')"
     echo "读前 16 字节  : $(head -c 16 "$P" 2>&1 | od -An -tx1 | head -1)"
+    echo
+    echo "-- getfacl（完整，一行一条）--"
+    if command -v getfacl >/dev/null 2>&1; then
+      getfacl -p "$P" 2>&1 | sed 's/^/   /'
+    else
+      echo "   (无 getfacl)"
+    fi
+    echo
+    echo "-- 权限判定（按**请求者 uid** 算，模仿内核顺序）--"
+    RUID="${HTTP_X_TRIM_USERID:-}"
+    echo "   请求者 uid    : ${RUID:-(拿不到)}"
+    echo "   请求者用户名  : ${HTTP_X_TRIM_USERNAME:-(未设置)}"
+    echo "   该用户的组    : $([ -n "$RUID" ] && id -G "$RUID" 2>&1 || echo '-')"
+    echo "   文件 owner/组 : $(stat -c 'uid=%u gid=%g' "$P" 2>&1)"
+    can_read_as "$RUID" "$P"
+    case $? in
+      0) echo "   ★ 判定结果    : **可读** ✓（应放行）" ;;
+      1) echo "   ★ 判定结果    : **不可读** ✗（应拒绝 403）" ;;
+      *) echo "   ★ 判定结果    : **无法判定**（按策略应拒绝）" ;;
+    esac
   fi
   echo
   # ⚠️ 关键：框架到底有没有告诉 CGI「当前是哪个用户」？
