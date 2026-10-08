@@ -278,14 +278,10 @@ export class CadViewerApp {
     }
     const warnings: string[] = []
     if (openOptions.useMainThreadDraw !== this.initUseMainThreadDraw) {
-      warnings.push(
-        'Text rendering mode applies on first load. Reload the page to change it.'
-      )
+      warnings.push('文字渲染方式在首次加载时生效，改完请刷新页面。')
     }
     if (openOptions.disableExport !== this.initDisableExport) {
-      warnings.push(
-        'Export availability applies on first load. Reload the page to change it.'
-      )
+      warnings.push('导出开关在首次加载时生效，改完请刷新页面。')
     }
     return warnings
   }
@@ -348,7 +344,7 @@ export class CadViewerApp {
           WEBWORKER_FILE_URLS
         )
         this.showMessage(
-          'CAD worker scripts are missing. Ensure DWG/MTEXT workers are deployed to assets/.',
+          '缺少 CAD worker 脚本：请确认 assets/ 下的 DWG / MTEXT worker 已部署。',
           'error'
         )
         return false
@@ -373,7 +369,7 @@ export class CadViewerApp {
       docManager.events.workersReady.addEventListener(({ ready }) => {
         if (!ready) {
           console.error('CAD worker scripts are not reachable')
-          this.showMessage('CAD worker scripts are not reachable', 'error')
+          this.showMessage('CAD worker 脚本不可达', 'error')
         }
       })
 
@@ -408,7 +404,7 @@ export class CadViewerApp {
       return true
     } catch (error) {
       console.error('Failed to initialize CAD viewer:', error)
-      this.showMessage('Failed to initialize CAD viewer', 'error')
+      this.showMessage('查看器初始化失败', 'error')
       return false
     }
   }
@@ -539,7 +535,7 @@ export class CadViewerApp {
 
       if (success) {
         this.hideUploadScreen()
-        const base = 'New drawing created'
+        const base = '已新建图纸'
         this.showMessage(
           sessionWarnings.length > 0
             ? `${base}. ${sessionWarnings.join(' ')}`
@@ -548,12 +544,12 @@ export class CadViewerApp {
         )
       } else {
         this.showUploadScreen()
-        this.showMessage('Failed to create new drawing', 'error')
+        this.showMessage('新建图纸失败', 'error')
       }
     } catch (error) {
       console.error('Error creating new drawing:', error)
       this.showUploadScreen()
-      this.showMessage(`Error creating new drawing: ${error}`, 'error')
+      this.showMessage(`新建图纸出错：${error}`, 'error')
     }
   }
 
@@ -622,7 +618,7 @@ export class CadViewerApp {
 
     const fileName = file.name.toLowerCase()
     if (!fileName.endsWith('.dxf') && !fileName.endsWith('.dwg')) {
-      this.showMessage('Please select a DXF or DWG file', 'error')
+      this.showMessage('请选择 DXF 或 DWG 文件', 'error')
       return
     }
 
@@ -632,7 +628,7 @@ export class CadViewerApp {
       const docManager = this.requireDocManager().instance
       if (!(await docManager.areWorkersReady())) {
         this.showMessage(
-          'CAD worker scripts are not reachable. Check deployment of assets/*-worker.js.',
+          'CAD worker 脚本不可达：请检查 assets/*-worker.js 是否已部署。',
           'error'
         )
         return
@@ -654,7 +650,7 @@ export class CadViewerApp {
 
       if (success) {
         this.hideUploadScreen()
-        const base = `Successfully loaded: ${file.name}`
+        const base = `已打开：${file.name}`
         this.showMessage(
           sessionWarnings.length > 0
             ? `${base}. ${sessionWarnings.join(' ')}`
@@ -663,12 +659,12 @@ export class CadViewerApp {
         )
       } else {
         this.showUploadScreen()
-        this.showMessage(`Failed to load: ${file.name}`, 'error')
+        this.showMessage(`打开失败：${file.name}`, 'error')
       }
     } catch (error) {
       console.error('Error loading file:', error)
       this.showUploadScreen()
-      this.showMessage(`Error loading file: ${error}`, 'error')
+      this.showMessage(`加载文件出错：${error}`, 'error')
     }
   }
 

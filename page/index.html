@@ -1,18 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CAD Simple Viewer Example — With Plugins</title>
+    <title>CAD 查看器</title>
     <link rel="stylesheet" href="/src/styles/app.css" />
   </head>
   <body>
     <div class="viewer-container" id="viewerPane">
-      <nav class="demo-nav" aria-label="Demo pages">
-        <a href="./index.html" class="is-active">With plugins</a>
-        <a href="./no-plugin.html">Without plugins</a>
-      </nav>
-
       <div class="upload-screen" id="uploadScreen">
         <div class="file-upload-container">
           <div class="upload-panel">
@@ -24,16 +19,14 @@
                   </svg>
                 </div>
                 <div class="upload-hero-text">
-                  <h1 class="upload-title">Select CAD File to View</h1>
-                  <p class="upload-subtitle">Import DWG or DXF drawings into the viewer</p>
+                  <h1 class="upload-title">打开 CAD 图纸</h1>
+                  <p class="upload-subtitle">
+                    支持 DWG / DXF：可打开飞牛 NAS 上的图纸，也可拖入本地文件
+                  </p>
                 </div>
               </section>
 
               <div class="upload-actions">
-                <button type="button" class="new-drawing-button" id="newDrawingButton">
-                  New Drawing
-                </button>
-
                 <!-- ★ 本应用新增：从飞牛 NAS 打开图纸。
                      走开放 API 的 pickUserFile（宿主内）或 openAppAuth（浏览器标签里），
                      选完拿到的是**已授权给本应用**的绝对路径。 -->
@@ -41,7 +34,7 @@
                   type="button"
                   class="new-drawing-button"
                   id="openNasButton"
-                  style="margin-top: 10px; background: #2563eb; color: #fff"
+                  style="background: #2563eb; color: #fff"
                 >
                   打开 NAS 上的图纸
                 </button>
@@ -50,12 +43,18 @@
                   style="font-size: 12px; opacity: 0.75; margin: 8px 0 0; line-height: 1.5"
                 ></p>
 
-                <p class="upload-divider" aria-hidden="true"><span>or</span></p>
+                <p class="upload-divider" aria-hidden="true"><span>或</span></p>
+
+                <button type="button" class="new-drawing-button" id="newDrawingButton">
+                  新建图纸
+                </button>
+
+                <p class="upload-divider" aria-hidden="true"><span>或</span></p>
 
                 <div class="upload-dropzone" id="uploadDropzone" role="button" tabindex="0">
                   <div class="dropzone-content">
                     <p class="dropzone-title">
-                      Drop file or <span class="dropzone-link">browse</span>
+                      拖入文件，或<span class="dropzone-link">点击选择</span>
                     </p>
                     <div class="format-tags">
                       <span class="format-tag">DWG</span>
@@ -68,74 +67,74 @@
 
             <section class="settings-section">
               <header class="settings-header">
-                <h2 class="settings-title">Open options</h2>
+                <h2 class="settings-title">打开选项</h2>
               </header>
 
               <div class="settings-grid">
                 <div class="setting-block setting-block--full">
-                  <h3 class="setting-label">Initial view</h3>
-                  <div class="pill-segment" data-option-group="openViewMode" role="radiogroup" aria-label="Initial view">
-                    <button type="button" class="pill-option is-active" data-value="auto" role="radio" aria-checked="true" title="Based on access mode">Auto</button>
-                    <button type="button" class="pill-option" data-value="extents" role="radio" aria-checked="false" title="Fit drawing">Extents</button>
-                    <button type="button" class="pill-option" data-value="saved" role="radio" aria-checked="false" title="AutoCAD saved view">Saved</button>
+                  <h3 class="setting-label">初始视图</h3>
+                  <div class="pill-segment" data-option-group="openViewMode" role="radiogroup" aria-label="初始视图">
+                    <button type="button" class="pill-option is-active" data-value="auto" role="radio" aria-checked="true" title="按访问模式决定">自动</button>
+                    <button type="button" class="pill-option" data-value="extents" role="radio" aria-checked="false" title="缩放到图形范围">范围</button>
+                    <button type="button" class="pill-option" data-value="saved" role="radio" aria-checked="false" title="AutoCAD 保存的视图">保存视图</button>
                   </div>
                 </div>
 
                 <div class="setting-block setting-block--full">
-                  <h3 class="setting-label">Access mode</h3>
-                  <div class="pill-segment" data-option-group="accessMode" role="radiogroup" aria-label="Access mode">
-                    <button type="button" class="pill-option" data-value="0" role="radio" aria-checked="false" title="View only">Read</button>
-                    <button type="button" class="pill-option" data-value="4" role="radio" aria-checked="false" title="View &amp; review">Review</button>
-                    <button type="button" class="pill-option is-active" data-value="8" role="radio" aria-checked="true" title="Full access">Write</button>
+                  <h3 class="setting-label">访问模式</h3>
+                  <div class="pill-segment" data-option-group="accessMode" role="radiogroup" aria-label="访问模式">
+                    <button type="button" class="pill-option" data-value="0" role="radio" aria-checked="false" title="仅查看">只读</button>
+                    <button type="button" class="pill-option" data-value="4" role="radio" aria-checked="false" title="查看并可批注">审阅</button>
+                    <button type="button" class="pill-option is-active" data-value="8" role="radio" aria-checked="true" title="完整读写">编辑</button>
                   </div>
                 </div>
 
                 <div class="setting-block setting-block--full">
-                  <h3 class="setting-label">Curve quality</h3>
-                  <div class="pill-segment" data-option-group="circleSides" role="radiogroup" aria-label="Curve quality">
-                    <button type="button" class="pill-option is-active" data-value="50" role="radio" aria-checked="true" title="Fewer vertices, smaller files">Memory</button>
-                    <button type="button" class="pill-option" data-value="100" role="radio" aria-checked="false" title="Balanced (100 sides per circle)">Standard</button>
-                    <button type="button" class="pill-option" data-value="1000" role="radio" aria-checked="false" title="Smoother curves, more memory">Quality</button>
+                  <h3 class="setting-label">曲线精度</h3>
+                  <div class="pill-segment" data-option-group="circleSides" role="radiogroup" aria-label="曲线精度">
+                    <button type="button" class="pill-option is-active" data-value="50" role="radio" aria-checked="true" title="顶点更少、占用更小">省内存</button>
+                    <button type="button" class="pill-option" data-value="100" role="radio" aria-checked="false" title="均衡（每圆 100 段）">标准</button>
+                    <button type="button" class="pill-option" data-value="1000" role="radio" aria-checked="false" title="更平滑、占用更多">高质量</button>
                   </div>
                 </div>
 
                 <div class="setting-block">
-                  <h3 class="setting-label">Text rendering</h3>
-                  <div class="pill-segment" data-option-group="textRendering" role="radiogroup" aria-label="Text rendering">
-                    <button type="button" class="pill-option" data-value="worker" role="radio" aria-checked="false" title="Faster, more memory">Worker</button>
-                    <button type="button" class="pill-option is-active" data-value="main" role="radio" aria-checked="true" title="Slower, less memory">Main thread</button>
+                  <h3 class="setting-label">文字渲染</h3>
+                  <div class="pill-segment" data-option-group="textRendering" role="radiogroup" aria-label="文字渲染">
+                    <button type="button" class="pill-option" data-value="worker" role="radio" aria-checked="false" title="更快，占用内存更多">工作线程</button>
+                    <button type="button" class="pill-option is-active" data-value="main" role="radio" aria-checked="true" title="稍慢，占用内存更少">主线程</button>
                   </div>
                 </div>
 
                 <div class="setting-block">
-                  <h3 class="setting-label">Progressive</h3>
-                  <div class="pill-segment" data-option-group="progressiveRendering" role="radiogroup" aria-label="Progressive rendering">
-                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="Show geometry while loading">On</button>
-                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="Wait until fully converted">Off</button>
+                  <h3 class="setting-label">渐进渲染</h3>
+                  <div class="pill-segment" data-option-group="progressiveRendering" role="radiogroup" aria-label="渐进渲染">
+                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="边转换边显示">开</button>
+                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="等完全转换完再显示">关</button>
                   </div>
                 </div>
 
                 <div class="setting-block">
-                  <h3 class="setting-label">Non-plottable</h3>
-                  <div class="pill-segment" data-option-group="noPlotLayers" role="radiogroup" aria-label="Non-plottable layers">
-                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="Web viewer default">Hide</button>
-                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="AutoCAD editor semantics">Show</button>
+                  <h3 class="setting-label">非打印图层</h3>
+                  <div class="pill-segment" data-option-group="noPlotLayers" role="radiogroup" aria-label="非打印图层">
+                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="网页查看器默认行为">隐藏</button>
+                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="与 AutoCAD 编辑器一致">显示</button>
                   </div>
                 </div>
 
                 <div class="setting-block setting-block--half">
-                  <h3 class="setting-label">Export</h3>
-                  <div class="pill-segment" data-option-group="disableExport" role="radiogroup" aria-label="Export">
-                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="Allow DXF/HTML/PDF/SVG/PNG export">Enable</button>
-                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="Hide export commands and File menu items">Disable</button>
+                  <h3 class="setting-label">导出</h3>
+                  <div class="pill-segment" data-option-group="disableExport" role="radiogroup" aria-label="导出">
+                    <button type="button" class="pill-option is-active" data-value="false" role="radio" aria-checked="true" title="允许导出 DXF / HTML / PDF / SVG / PNG">启用</button>
+                    <button type="button" class="pill-option" data-value="true" role="radio" aria-checked="false" title="隐藏导出命令与「文件」菜单项">禁用</button>
                   </div>
                 </div>
 
                 <div class="setting-block setting-block--half">
-                  <h3 class="setting-label">Paper background</h3>
-                  <div class="pill-segment" data-option-group="paperSpaceBackground" role="radiogroup" aria-label="Paper background">
-                    <button type="button" class="pill-option is-active" data-value="ffffff" role="radio" aria-checked="true" title="Desktop CAD / print preview">White</button>
-                    <button type="button" class="pill-option" data-value="000000" role="radio" aria-checked="false" title="Web viewer preference">Black</button>
+                  <h3 class="setting-label">图纸背景</h3>
+                  <div class="pill-segment" data-option-group="paperSpaceBackground" role="radiogroup" aria-label="图纸背景">
+                    <button type="button" class="pill-option is-active" data-value="ffffff" role="radio" aria-checked="true" title="桌面 CAD / 打印预览">白</button>
+                    <button type="button" class="pill-option" data-value="000000" role="radio" aria-checked="false" title="网页查看器习惯">黑</button>
                   </div>
                 </div>
               </div>
@@ -144,15 +143,15 @@
         </div>
       </div>
 
-      <button type="button" class="reopen-fab" id="reopenButton" aria-label="Open another file">
+      <button type="button" class="reopen-fab" id="reopenButton" aria-label="再打开一个文件">
         <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 6.5V15a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 17 15V7.5A1.5 1.5 0 0 0 15.5 6H7.414a1.5 1.5 0 0 1-1.06-.44l-1.414-1.414A1.5 1.5 0 0 0 4.586 4H4.5A1.5 1.5 0 0 0 3 5.5V6.5z"/>
           <path d="M8 11v2m0 0v-2m0 2h4m-4 0h4"/>
         </svg>
-        Open
+        打开
       </button>
 
-      <section class="viewer-canvas-area" aria-label="Drawing canvas">
+      <section class="viewer-canvas-area" aria-label="图纸画布">
         <input type="file" id="fileInputElement" accept=".dxf,.dwg" />
         <div id="cad-container"></div>
       </section>
