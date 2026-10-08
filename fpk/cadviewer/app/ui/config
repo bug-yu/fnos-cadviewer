@@ -6,7 +6,10 @@
       "type": "url",
       "microApp": true,
       "url": "/cgi/ThirdParty/cadviewer/index.cgi/full/index.html",
-      "allUsers": true
+      "allUsers": true,
+      "control": {
+        "accessPerm": "hidden"
+      }
     },
     "cadviewer.view": {
       "title": "用 CAD 查看器打开",
@@ -16,7 +19,10 @@
       "url": "/cgi/ThirdParty/cadviewer/index.cgi/index.html",
       "fileTypes": ["dwg", "dxf"],
       "noDisplay": true,
-      "allUsers": true
+      "allUsers": true,
+      "control": {
+        "accessPerm": "hidden"
+      }
     }
   }
 }
