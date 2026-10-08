@@ -1,5 +1,5 @@
 appname               = cadviewer
-version               = 0.1.1
+version               = 0.1.2
 display_name          = CAD 查看器
 desc                  = 基于 mlightcad/cad-viewer 的 DWG/DXF 查看器：文件管理器右键预览用「简易查看器」，桌面图标打开「完整版」。可打开飞牛 NAS 上自己有权限的图纸，也能打开本地文件。
 source                = thirdparty
@@ -18,7 +18,7 @@ desktop_applaunchname = cadviewer.Application
 #    JS SDK 相关能力可能无法初始化」—— 而本应用的核心就是 JS SDK 的 pickUserFile。
 micro_app             = true
 
-changelog             = 0.1.1：修「桌面图标打开 404」—— 包里的 app/ui/index.cgi 是可执行权限缺失（0666）。官方文档说打包工具会处理可执行权限，但 fnpack.exe 在 Windows 上读不到 chmod +x，所以打出来的包在 NAS 上不可执行，CGI 入口就 404。现在构建流程里补了一步：打包后重写包内权限为 0755、重算 manifest.checksum、并原样保留 fpk 尾部的附加数据（207 字节，实测不是内容签名，同源码两次构建都不同）。0.1.0：P0 验证版 —— 只验证一件事：飞牛开放 API 的 pickUserFile（选择文件/目录并授权给应用）能不能在**桌面窗口**里使用。这是「浏览打开 NAS 上图纸」整个方案的前提；能用则按方案继续做完整版，不能用则要改成自己实现浏览与权限判定。
+changelog             = 0.1.2：改用「安装回调补权限」的正确做法 —— 0.1.1 试图打完包再改 fpk 里的可执行位，结果被飞牛判「不是有效的 fpk 文件」（fpk 尾部有完整性校验，改了内容就失效；实测同一份源码连打两次尾部都不同，但只要改内容就被拒）。现在改为在 cmd/install_callback 与 cmd/upgrade_callback 里 chmod +x app/ui/index.cgi —— 那两个脚本是框架执行的，权限由框架负责；官方文档也提示过「如果在设备上手动测试，请确认该文件可以执行」。0.1.1：修「桌面图标打开 404」—— 包里的 app/ui/index.cgi 是可执行权限缺失（0666）。官方文档说打包工具会处理可执行权限，但 fnpack.exe 在 Windows 上读不到 chmod +x，所以打出来的包在 NAS 上不可执行，CGI 入口就 404。0.1.0：P0 验证版 —— 只验证一件事：飞牛开放 API 的 pickUserFile（选择文件/目录并授权给应用）能不能在**桌面窗口**里使用。这是「浏览打开 NAS 上图纸」整个方案的前提；能用则按方案继续做完整版，不能用则要改成自己实现浏览与权限判定。
 
 # 不监听固定端口（用 CGI 轻量入口，protocol/port 会被忽略）
 checkport             = false

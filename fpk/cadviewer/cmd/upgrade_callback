@@ -1,5 +1,21 @@
 #!/bin/bash
+# 升级完成后的收尾：给 CGI 入口补上可执行位（理由见 install_callback 的注释）。
+#
+# 升级时文件会被重新覆盖 → 权限又回到 0666 ✗ → 所以这里也要补一次 ✓
 
-### This script is called after the user upgrades the application.
+LOG="${TRIM_PKGVAR}/install.log"
+mkdir -p "${TRIM_PKGVAR}" 2>/dev/null
+
+{
+  echo "$(date '+%F %T') upgrade_callback: TRIM_APPDEST=${TRIM_APPDEST}"
+  CGI="${TRIM_APPDEST}/ui/index.cgi"
+  if [ -f "$CGI" ]; then
+    chmod +x "$CGI" && echo "  chmod +x ${CGI} → $(stat -c '%a' "$CGI" 2>/dev/null || echo '?')"
+  else
+    echo "  ⚠️ 没找到 ${CGI}"
+  fi
+} >> "$LOG" 2>&1
+
+find "${TRIM_APPDEST}/ui" -maxdepth 1 -name '*.cgi' -exec chmod +x {} \; 2>/dev/null
 
 exit 0

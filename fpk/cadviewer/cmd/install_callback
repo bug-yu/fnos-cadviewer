@@ -1,5 +1,36 @@
 #!/bin/bash
+# 安装完成后的收尾：给 CGI 入口补上可执行位。
+#
+# ⚠️ 为什么需要这一步
+#   官方文档说「打包工具会在打包过程中处理可执行权限」，但 **fnpack.exe 在 Windows 上
+#   读不到 Git Bash 的 `chmod +x`**（Windows 文件系统不表达这个位）✗
+#   → 打出来的包里 app/ui/index.cgi 是 **0666** ✗
+#   → 装到 NAS 上不可执行 → CGI 入口路由不到 → **桌面图标打开就 404** ✗
+#
+# ⚠️ 为什么不能「打完包再改 fpk」
+#   实测那样会被判 **「不是有效的 fpk 文件」** ✗ ——
+#   fpk 尾部有一段完整性校验（约 200~260 字节，疑似签名：
+#   同一份源码用 fnpack 连打两次尾部都不同，但**改内容就失效**）。
+#   → **不要试图修改已打好的 fpk** ✗
+#
+# ✅ 正确做法：让**框架执行的回调**来补权限 ✓（回调自身的权限由框架负责 ✓）
+#   官方文档也提示过：「如果在设备上手动测试，请确认该文件可以执行」✓
 
-### This script is called after the user installs the application.
+LOG="${TRIM_PKGVAR}/install.log"
+mkdir -p "${TRIM_PKGVAR}" 2>/dev/null
+
+{
+  echo "$(date '+%F %T') install_callback: TRIM_APPDEST=${TRIM_APPDEST}"
+  CGI="${TRIM_APPDEST}/ui/index.cgi"
+  if [ -f "$CGI" ]; then
+    chmod +x "$CGI" && echo "  chmod +x ${CGI} → $(stat -c '%a' "$CGI" 2>/dev/null || echo '?')"
+  else
+    echo "  ⚠️ 没找到 ${CGI}（目录结构可能变了）"
+    ls -la "${TRIM_APPDEST}" 2>/dev/null
+  fi
+} >> "$LOG" 2>&1
+
+# 兜底：ui 目录下所有 .cgi 都补上（以后加别的 CGI 也不用改这里）
+find "${TRIM_APPDEST}/ui" -maxdepth 1 -name '*.cgi' -exec chmod +x {} \; 2>/dev/null
 
 exit 0
