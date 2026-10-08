@@ -1,0 +1,17 @@
+# 一律 LF —— 这个项目里有 shell 脚本（cmd/*、app/ui/index.cgi），
+# 它们**会被打进 .fpk 并在 Linux 上执行**。CRLF 会让 shebang 变成
+# `#!/bin/bash\r` → `bad interpreter` ✗（FileView 项目踩过这个坑）。
+#
+# ⚠️ 注意：git 的 `eol=lf` 只保证**仓库里**是 LF；fnpack 打的是**工作区** ✗
+#    —— 所以打包前仍要确认工作区文件是 LF（见 README 的自检）。
+* text=auto eol=lf
+
+# 二进制，别动
+*.png binary
+*.PNG binary
+*.jpg binary
+*.ico binary
+*.fpk binary
+*.gz binary
+*.wasm binary
+*.shx binary
