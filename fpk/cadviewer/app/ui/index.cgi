@@ -208,6 +208,16 @@ if [ "$REL_PATH" = "/api/diag" ]; then
     echo "  ${v} = ${val:-(未设置)}"
   done
   echo
+  # ★ 关键：有没有 TRIM_API_TOKEN？
+  #   官方后端 API（含 trim.file.checkUserACL —— 「检查某用户对某路径是否可读」）
+  #   需要 `Authorization: Bearer $TRIM_API_TOKEN`，而 token 由系统注入给「应用脚本」。
+  #   CGI 算不算「应用脚本」是这条架构的关键 ✓（只打有没有，**不打值** ✗）
+  echo "== 后端 API 的 token（只显示有无，不显示值）=="
+  echo "  TRIM_API_TOKEN : ${TRIM_API_TOKEN:+已设置（长度 ${#TRIM_API_TOKEN}）}"
+  [ -z "$TRIM_API_TOKEN" ] && echo "  TRIM_API_TOKEN : （未设置）"
+  echo "  Unix Socket    : $( [ -S /var/run/trim_open_gateway_apiscope.socket ] && echo '存在 ✓' || echo '不存在 ✗（或不可见）' )"
+  echo "  curl 可用      : $(command -v curl >/dev/null 2>&1 && echo '有 ✓' || echo '没有 ✗')"
+  echo
   echo "== 环境里与 trim/user/uid 相关的 =="
   env | grep -iE "trim|user|uid|acl" | sort | head -30
   echo
@@ -242,11 +252,21 @@ if [ "$REL_PATH" = "/api/raw" ]; then
   fi
 
   # ── 按「请求者 uid」再判一道 ────────────────────────────────────────────
-  # 为什么需要：框架的授权是给文件加一条 `group:<应用组>:r--` ✓ ——
-  #   那是**给应用**的，不是给具体用户的 ✗
-  #   → 用户 B 有可能读到用户 A 授权过的文件（应用身份相同）✗
-  # 模式由 ${SELF_DIR}/../raw-guard.conf 决定：
-  #   log（默认，只记不拦）/ enforce（拦截）
+  # ⚠️⚠️⚠️ 重要：这段判定是**基于 mode/ACL** 的，而真机已证明
+  #     **飞牛根本不用 mode/ACL 判权限** ✗ ——
+  #     实测：用户 1003 能读写「mode=000、owner=yang、ACL 里没给他任何权限」的文件 ✓
+  #     → 也就是说这个模型的判定结果**不可信** ✗，**不要启用 enforce** ✗
+  #
+  #     正确做法（官方文档 api/authorization/file-acl.md）：
+  #       调后端 API `trim.file.checkUserACL`（检查某个 uid 对某路径是否可读/可写）
+  #       文档原话：「拿到授权后**不要直接把内容提供给所有用户**，
+  #                 返回文件列表、预览内容前，还需要用当前使用用户的 uid 检查权限」
+  #       它需要 `Authorization: Bearer $TRIM_API_TOKEN`，走 Unix Socket
+  #       `/var/run/trim_open_gateway_apiscope.socket`
+  #     ⚠️ token 是系统注入给「应用脚本」（如 cmd/main）的 —— **CGI 有没有待实测** ✓
+  #        （诊断页会打印 TRIM_API_TOKEN 有没有 / socket 在不在 / curl 可用吗）
+  #
+  #     在走通 checkUserACL 之前，这里只保留 log（记录用），**不拦截** ✓
   GUARD_CONF="${SELF_DIR}/../raw-guard.conf"
   GUARD_MODE="$(tr -d '[:space:]' < "$GUARD_CONF" 2>/dev/null)"
   [ -z "$GUARD_MODE" ] && GUARD_MODE="log"
