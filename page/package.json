@@ -27,7 +27,7 @@
     "@mlightcad/cad-simple-ui-plugin": "1.7.3",
     "@mlightcad/cad-simple-viewer": "1.7.3",
     "@mlightcad/data-model": "1.15.0",
-    "@mlightcad/libredwg-converter": "^3.15.0",
+    "@mlightcad/libredwg-converter": "3.15.0",
     "@mlightcad/mtext-parser": "^1.5.3",
     "@mlightcad/mtext-renderer": "^0.13.1",
     "@trimjs/web-app": "^0.4.2"
