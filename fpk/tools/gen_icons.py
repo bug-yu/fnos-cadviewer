@@ -1,27 +1,31 @@
 """生成「CAD 查看器」的飞牛应用图标（64 / 256 两档）。
 
-设计元素（两个方案共用）：
-  · **平面图**（外墙 + 一道带门洞的隔墙）—— 这个应用实际打开的就是 2D 图纸 ✓
-  · **尺寸标注**（琥珀色双箭头线）—— CAD 最独有的视觉符号，普通图片查看器没有 ✓
+设计语言来自用户给的一张参考图（豆包 AI 生成）：**深蓝底 + 青色线框立方体 +
+橙色顶点**。但那张图元素太多（四角还贴了 4 张蓝图小样、细尺寸线、放大镜，
+外加右下角水印），缩到 64px 会糊成一团。这里**重新画一个简约版**：
 
-两个方案（`VARIANT` 决定哪个进包）：
-  · `blueprint`（默认）**蓝图**：蓝底 + 白线 + 琥珀标注。
-      「蓝图」本身就是 CAD 的经典意象，元素最少 → 64px 下最清晰 ✓
-  · `sheet`  **图纸卡片**：白纸卡片 + 蓝线 + 琥珀标注，多一层「文档/查看器」的意味。
+  · 只保留「等轴测线框立方体 + 橙色顶点圆点」两个元素
+  · 立方体只画**可见的 9 条棱**（被自己挡住的那 3 条不画）—— 这是最省的一条，
+    也正是「线框」而不是「实体」的观感
+  · 橙色顶点圆点是「控制点」的意象，也是它区别于普通 3D/盒子图标的关键 ✓
+  · ⚠️ **不用参考图本身**：那是 AI 生成图、带水印，分辨率与边缘也不适合做图标 ✗
+
+方案（`VARIANT` 决定哪个进包）：
+  · `cube`（默认）**极简**：立方体 + 顶点圆点
+  · `cube_dim`        再加一条**琥珀色尺寸标注**（补一点「工程图纸」的意味）
+  · `blueprint`       上一版（蓝图 + 平面图），留作备选
 
 官方规范（developer.fnnas.com/docs/core-concepts/icon）：
   · 包图标 `ICON.PNG` 64x64 + `ICON_256.PNG` 256x256（放在包根目录）
-  · 入口图标 `app/ui/images/icon_64.png` + `icon_256.png`（由 ui/config 的 icon 字段引用）
+  · 入口图标 `app/ui/images/icon_64.png` + `icon_256.png`
   · PNG、sRGB、≤ 1024 KB、**圆角矩形主体**（不要直角满铺）、不贴边
   · **64 px 下仍要能看清主体** ← 本脚本会额外输出 64px 放大预览供肉眼检查
 
-⚠️ 全部用几何图形**程序化绘制**（不用位图素材）：可复现、可微调，
-   也不牵扯任何第三方商标。
-⚠️ 三个已经踩过的绘制坑（都在下面代码里标了）：
-   ① PIL 的 `rectangle(outline, width)` 是**向内**描边，`line(width)` 是**居中**描边 ——
-      混用会让内墙超出外墙内沿，看着像糊成一团 ✗
-   ② 缩到 64px 后「小房间」会糊 —— 所以隔墙只留**一道**、并且留**门洞** ✓
-   ③ 细线在 64px 下会整条消失（1024 下 <20 的线宽基本看不见）✗
+⚠️ 踩过的绘制坑（都在下面代码里标了）：
+  ① PIL 的 `rectangle(outline, width)` 是**向内**描边，`line(width)` 是**居中**描边 ——
+     混用会让内墙超出外墙内沿，看着像糊成一团 ✗
+  ② 缩到 64px 后细节会糊 → **元素越少越好** ✗
+  ③ 1024 下 <20 的线宽在 64px 下会整条消失 ✗
 
 依赖 Pillow：pip install pillow
 用法：python gen_icons.py
@@ -30,24 +34,50 @@
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(os.path.dirname(HERE), "cadviewer")   # fpk/cadviewer ← 包根目录
 UI_IMAGES = os.path.join(PKG, "app", "ui", "images")
 
-VARIANT = "blueprint"      # blueprint（默认）| sheet
+VARIANT = "cube"           # cube（默认）| cube_dim | blueprint
 
 SS = 4                     # 超采样倍数：先画 4 倍再缩，边缘更干净
 RADIUS_RATIO = 0.225       # 圆角半径 / 边长（与飞牛系统图标、FileView 图标一致）
 
-# 磁贴底色：斜向渐变（左上偏亮、右下偏深），比纯色更有体积感
-TILE_TL = (79, 140, 247)      # #4F8CF7
-TILE_BR = (26, 74, 205)       # #1A4ACD
-SHEET = (255, 255, 255)
-LINE_ON_TILE = (255, 255, 255)   # 蓝图方案：线画在蓝底上 → 用白色
-LINE_ON_SHEET = (37, 99, 235)    # 图纸方案：线画在白纸上 → 用蓝色
-ACCENT = (245, 158, 11)          # #F59E0B 尺寸标注
+# 深蓝底：斜向渐变（左上偏亮、右下偏深）—— 与 FileView 的浅蓝底**刻意区分**
+TILE_TL = (34, 82, 138)       # #22528A
+TILE_BR = (10, 32, 62)        # #0A203E
+CUBE_LINE = (56, 224, 245)    # #38E0F5 青色线框
+CUBE_DOT = (251, 146, 60)     # #FB923C 橙色顶点
+ACCENT = (245, 158, 11)       # #F59E0B 尺寸标注
+
+# --- 等轴测立方体（都按 1024 的画布设计）-----------------------------------
+COS30 = 0.8660254037844387
+SIN30 = 0.5
+CUBE_SCALE = 300.0             # 单位棱长对应的像素 → 立方体 600 高 / 520 宽
+CUBE_OX = 512.0                # 立方体外接框中心
+CUBE_OY = 512.0
+
+# 立方体的 12 条棱。等轴测下**最近的顶点是 (0,0,1)**，它连着 3 条棱；
+# **最远的顶点是 (1,1,0)**（投影后正好落在六边形中心），它的 3 条棱被自己挡住，不画。
+ALL_EDGES = [
+    ((0, 0, 0), (1, 0, 0)), ((0, 1, 0), (1, 1, 0)),
+    ((0, 0, 1), (1, 0, 1)), ((0, 1, 1), (1, 1, 1)),
+    ((0, 0, 0), (0, 1, 0)), ((1, 0, 0), (1, 1, 0)),
+    ((0, 0, 1), (0, 1, 1)), ((1, 0, 1), (1, 1, 1)),
+    ((0, 0, 0), (0, 0, 1)), ((1, 0, 0), (1, 0, 1)),
+    ((0, 1, 0), (0, 1, 1)), ((1, 1, 0), (1, 1, 1)),
+]
+HIDDEN_VERTEX = (1, 1, 0)
+
+
+def cube_xy(v):
+    """等轴测投影：x 轴向右上、y 轴向左上、z 轴向上（屏幕 y 向下为正）。"""
+    x, y, z = v
+    px = (x - y) * COS30 * CUBE_SCALE + CUBE_OX
+    py = -((x + y) * SIN30 + z) * CUBE_SCALE + CUBE_OY + CUBE_SCALE
+    return px, py
 
 
 def rounded_mask(size, radius):
@@ -72,41 +102,40 @@ def gradient(size, c1, c2):
 
 
 def arrow_head(d, x, y, direction, length, half):
-    """尺寸线端点的实心三角箭头。direction = -1 左 / +1 右。"""
     d.polygon([(x, y), (x + direction * length, y - half),
                (x + direction * length, y + half)], fill=ACCENT)
 
 
-def draw_plan(d, bx0, by0, bx1, by1, width, color, inner="L"):
-    """平面图：外墙（闭合折线，圆角接头）+ 一道内墙。
+def draw_cube(d, u, line_w, dot_r):
+    """等轴测线框立方体：只画可见的 9 条棱 + 7 个橙色顶点圆点。"""
+    for a, b in ALL_EDGES:
+        if HIDDEN_VERTEX in (a, b):
+            continue
+        ax, ay = cube_xy(a)
+        bx, by = cube_xy(b)
+        d.line([(u(ax), u(ay)), (u(bx), u(by))], fill=CUBE_LINE,
+               width=int(u(line_w)), joint="curve")
+    for x in (0, 1):
+        for y in (0, 1):
+            for z in (0, 1):
+                if (x, y, z) == HIDDEN_VERTEX:
+                    continue
+                px, py = cube_xy((x, y, z))
+                r = u(dot_r)
+                d.ellipse([u(px) - r, u(py) - r, u(px) + r, u(py) + r], fill=CUBE_DOT)
 
-    `inner` 两种形式（都要能在 64px 下辨认，且别看成字母）：
-      · `L`    内墙呈 L 形（竖到 60% 再横到右墙）→ 最像「两个房间」的平面图 ✓
-      · `door` 竖隔墙 + 中间留门洞 → 更像平面图，但缩到 64px 有点像字母「H」✗
-    """
+
+def draw_plan(d, bx0, by0, bx1, by1, width, color):
+    """（blueprint 方案）平面图：外墙 + 一道 L 形内墙。"""
     d.line([(bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1), (bx0, by0)],
            fill=color, width=width, joint="curve")
     xm = bx0 + (bx1 - bx0) * 0.46
-    h = by1 - by0
-    if inner == "L":
-        ym = by0 + h * 0.60
-        d.line([(xm, by0), (xm, ym)], fill=color, width=width)
-        d.line([(xm, ym), (bx1, ym)], fill=color, width=width)
-    else:
-        d.line([(xm, by0), (xm, by0 + h * 0.60)], fill=color, width=width)
-        d.line([(xm, by0 + h * 0.78), (xm, by1)], fill=color, width=width)
+    ym = by0 + (by1 - by0) * 0.60
+    d.line([(xm, by0), (xm, ym)], fill=color, width=width)
+    d.line([(xm, ym), (bx1, ym)], fill=color, width=width)
 
 
-def draw_dim(d, bx0, bx1, plan_bottom, dy, w_ext, w_main, head_len, head_half):
-    """尺寸标注：一条带双箭头的线 + 两端延伸线。"""
-    for ex in (bx0, bx1):
-        d.line([(ex, plan_bottom), (ex, dy + w_ext)], fill=ACCENT, width=w_ext)
-    d.line([(bx0, dy), (bx1, dy)], fill=ACCENT, width=w_main)
-    arrow_head(d, bx0 + w_main, dy, +1, head_len, head_half)
-    arrow_head(d, bx1 - w_main, dy, -1, head_len, head_half)
-
-
-def build(size, variant=VARIANT, inner="L"):
+def build(size, variant=VARIANT):
     S = size * SS
     k = S / 1024.0                       # 几何都按 1024 的画布设计，这里统一缩放
 
@@ -117,48 +146,46 @@ def build(size, variant=VARIANT, inner="L"):
     mask = rounded_mask(size, round(size * RADIUS_RATIO)).resize((S, S), Image.NEAREST)
     tile = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     tile.paste(gradient(size, TILE_TL, TILE_BR), (0, 0), mask)
+    d = ImageDraw.Draw(tile)
 
-    if variant == "sheet":
-        # ② 白色图纸卡片（先垫一层柔和投影 —— 官方规范提到「留白和阴影应尽量与
-        #    系统图标保持一致」，有这一层才不会显得是贴上去的扁平块）
-        sx0, sy0, sx1, sy1 = u(200), u(176), u(824), u(848)
-        shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        ImageDraw.Draw(shadow).rounded_rectangle(
-            [sx0, sy0 + u(18), sx1, sy1 + u(18)], radius=u(58), fill=(6, 26, 84, 105)
-        )
-        tile = Image.alpha_composite(tile, shadow.filter(ImageFilter.GaussianBlur(u(18))))
-        d = ImageDraw.Draw(tile)
-        d.rounded_rectangle([sx0, sy0, sx1, sy1], radius=u(58), fill=SHEET)
-
-        # ③④ 平面图 + 尺寸标注（画在白纸上）
-        bx0, by0, bx1, by1 = u(300), u(268), u(724), u(692)
-        draw_plan(d, bx0, by0, bx1, by1, int(u(58)), LINE_ON_SHEET, inner)
-        draw_dim(d, bx0, bx1, by1 + u(24), u(782),
-                 int(u(22)), int(u(42)), u(66), u(34))
-    else:
-        # ② 蓝图：线直接画在蓝底上（不铺白纸）—— 元素最少，64px 下最清晰
-        d = ImageDraw.Draw(tile)
+    if variant == "blueprint":
         bx0, by0, bx1, by1 = u(252), u(230), u(772), u(750)
-        draw_plan(d, bx0, by0, bx1, by1, int(u(56)), LINE_ON_TILE, inner)
-        draw_dim(d, bx0, bx1, by1 + u(28), u(848),
-                 int(u(26)), int(u(46)), u(70), u(36))
+        draw_plan(d, bx0, by0, bx1, by1, int(u(56)), (255, 255, 255))
+        dy = u(848)
+        for ex in (bx0, bx1):
+            d.line([(ex, by1 + u(28)), (ex, dy + u(26))], fill=ACCENT, width=int(u(26)))
+        d.line([(bx0, dy), (bx1, dy)], fill=ACCENT, width=int(u(46)))
+        arrow_head(d, bx0 + u(46), dy, +1, u(70), u(36))
+        arrow_head(d, bx1 - u(46), dy, -1, u(70), u(36))
+    else:
+        draw_cube(d, u, line_w=46, dot_r=26)
+        if variant == "cube_dim":
+            # 立方体最低点（v000）在 y = CUBE_OY + CUBE_SCALE = 812，下方还有 212 的空白，
+            # 尺寸标注放那儿正好；左右与立方体外接框对齐
+            dy = u(900)
+            ex0 = u(CUBE_OX - COS30 * CUBE_SCALE)
+            ex1 = u(CUBE_OX + COS30 * CUBE_SCALE)
+            for ex in (ex0, ex1):
+                d.line([(ex, u(860)), (ex, dy + u(24))], fill=ACCENT, width=int(u(24)))
+            d.line([(ex0, dy), (ex1, dy)], fill=ACCENT, width=int(u(44)))
+            arrow_head(d, ex0 + u(44), dy, +1, u(68), u(34))
+            arrow_head(d, ex1 - u(44), dy, -1, u(68), u(34))
 
     return tile.resize((size, size), Image.LANCZOS)
 
 
 def contact_sheet():
-    """4 列 x 2 行对照图：上排 256px 原样，下排同一张缩到 64px 再放大 4 倍（NEAREST，
-    用来直接看 64px 下糊不糊）。列 = 蓝图+L / 蓝图+门洞 / 图纸卡片+L / 图纸卡片+门洞。"""
-    combos = [("blueprint", "L"), ("blueprint", "door"),
-              ("sheet", "L"), ("sheet", "door")]
+    """3 列 x 2 行对照图：上排 256px 原样，下排同一张缩到 64px 再放大 4 倍
+    （NEAREST，用来直接看 64px 下糊不糊）。"""
+    combos = ["cube", "cube_dim", "blueprint"]
     pad, cell = 24, 256
     W = pad + (cell + pad) * len(combos)
     H = pad + cell + pad + cell + pad
     canvas = Image.new("RGB", (W, H), (245, 247, 250))
-    for i, (variant, inner) in enumerate(combos):
+    for i, v in enumerate(combos):
         x = pad + i * (cell + pad)
-        canvas.paste(build(cell, variant, inner).convert("RGB"), (x, pad))
-        small = build(64, variant, inner).resize((cell, cell), Image.NEAREST)
+        canvas.paste(build(cell, v).convert("RGB"), (x, pad))
+        small = build(64, v).resize((cell, cell), Image.NEAREST)
         canvas.paste(small.convert("RGB"), (x, pad + cell + pad))
     return canvas
 
@@ -166,7 +193,7 @@ def contact_sheet():
 def verify(paths):
     """按官方规范自检产物 —— 尤其是**四角必须透明**（「圆角矩形主体，不要直角满铺」）。
 
-    这条只能在这里查（要解码像素），构建脚本 build.py 只用标准库解析 PNG 头，
+    这条只能在这里查（要解码像素）；构建脚本 build.py 只用标准库解析 PNG 头，
     查不了像素。所以「圆角」这个要求由**生成器自己**负责 ✓
     """
     bad = []
@@ -224,7 +251,7 @@ def main():
 
     cs = os.path.join(HERE, "icon_variants.png")
     contact_sheet().save(cs, "PNG")
-    print("  %-52s 列=蓝图+L / 蓝图+门洞 / 图纸卡片+L / 图纸卡片+门洞（上 256、下 64x4）"
+    print("  %-52s 列=极简 / 加尺寸标注 / 旧蓝图方案（上 256、下 64x4）"
           % os.path.relpath(cs, os.path.dirname(PKG)))
     return 0
 
