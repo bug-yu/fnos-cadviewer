@@ -56,6 +56,13 @@ def api(method, url, payload=None, raw=None, ctype="application/json", tries=4):
     return 0, b""
 
 
+def git(*args):
+    """跑一条 git 命令，返回 (退出码, stdout, stderr)。"""
+    p = subprocess.run(["git"] + list(args), cwd=ROOT,
+                       capture_output=True, text=True, timeout=180)
+    return p.returncode, p.stdout.strip(), p.stderr.strip()
+
+
 VER = sys.argv[1] if len(sys.argv) > 1 else None
 if not VER:
     print(__doc__)
@@ -74,13 +81,57 @@ if ("%s：" % VER) in cl:
         body = body[:len(VER) + 1 + m.start()]
 print("① 说明（%d 字符）：%s" % (len(body), body[:70]))
 
-r = subprocess.run(["git", "rev-parse", TAG], cwd=ROOT, capture_output=True, text=True)
-if r.returncode != 0:
-    subprocess.run(["git", "tag", "-a", TAG, "-m", "%s" % TAG], cwd=ROOT, capture_output=True)
-    subprocess.run(["git", "push", "origin", TAG], cwd=ROOT, capture_output=True)
-    print("② tag %s 已建并推送" % TAG)
+# ---------------------------------------------------------------------------
+# ② tag 必须指向**本地 HEAD**
+# ---------------------------------------------------------------------------
+# ⚠️⚠️ 旧写法是「`git rev-parse TAG` 成功就跳过」—— 于是**本地 tag 停在旧提交上时
+#    永远不修** ✗。0.4.3 就踩了：先发了一版（tag → 9459e23），换图标后重发，
+#    本地 tag 还在 9459e23，Release 的源码包与 README 就一直是旧的 ✗
+#    而且 GitHub 建 Release 时若不给 target_commitish，tag 还会落在
+#    「远端默认分支当时的位置」上 —— 所以「未推送就发版」也要拦住。
+rc, ahead, _ = git("log", "--oneline", "@{u}..HEAD")
+if ahead:
+    print("❌ 有**未推送**的提交 —— 远端默认分支还停在旧位置：")
+    for line in ahead.splitlines():
+        print("     " + line)
+    print("   先 `git push origin HEAD` 再发版，否则 tag 会建在旧提交上 ✗")
+    raise SystemExit(1)
+
+HEAD_SHA = git("rev-parse", "HEAD")[1]
+
+
+def remote_tag_sha():
+    """远端同名 tag 指向的**提交**（注解 tag 取 peeled 值）；不存在返回 None。"""
+    rc, out, _ = git("ls-remote", "--tags", "origin",
+                     "refs/tags/%s" % TAG, "refs/tags/%s^{}" % TAG)
+    if not out:
+        return None
+    plain = None
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 2:
+            continue
+        sha, ref = parts
+        if ref.endswith("^{}"):
+            return sha          # peeled = 真正的提交对象
+        plain = sha
+    return plain
+
+
+rc, local, _ = git("rev-parse", "%s^{commit}" % TAG)
+local = local if rc == 0 else None
+remote = remote_tag_sha()
+if local == HEAD_SHA and remote == HEAD_SHA:
+    print("② tag %s 已指向 HEAD（%s）" % (TAG, HEAD_SHA[:8]))
 else:
-    print("② tag %s 已存在" % TAG)
+    # ⚠️⚠️ **不要「先删远端 tag 再重建」** ✗ —— 删掉 tag 会让 GitHub 把对应的
+    #    Release 变成 `untagged-<hash>`（**丢掉 tag 关联**）。
+    #    0.4.3 就这么变成过一个游离 Release，只能再用 API 把它 PATCH 回去 ✗
+    #    直接 `push -f` 覆盖 tag 即可，Release 的关联不会断 ✓
+    git("tag", "-f", "-a", TAG, "-m", TAG)
+    git("push", "-f", "origin", TAG)
+    print("② tag %s → %s（原本地 %s / 原远端 %s）"
+          % (TAG, HEAD_SHA[:8], (local or "无")[:8], (remote or "无")[:8]))
 
 st, d = api("GET", "https://api.github.com/repos/%s/releases?per_page=100" % REPO)
 rel = next((x for x in json.loads(d) if x["tag_name"] == TAG), None)
