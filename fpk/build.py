@@ -88,20 +88,27 @@ def check():
         print("     右键预览 url = %s" % view_url)
     ok &= routing
 
-    # 应用设置里的显示：入口**保留**，只藏「访问端口 / 访问路径 / 自定义 URL」三行。
+    # 应用设置里的显示：入口**保留**，但「桌面访问」要**变灰不可点**，另外三行直接隐藏。
+    # ⚠️ 为什么「桌面访问」改成 readonly（灰）：
+    #    - 本应用两个入口一个 `noDisplay: true`（右键专用，桌面上根本没有图标）、
+    #      一个 `type: url` + `allUsers: true` —— 实测那个「桌面访问」开关**不生效** ✗
+    #      用户反馈「这个界面的权限不生效，改成灰色吧」
+    #    - 官方文档只记了 accessPerm 的三态：editable 可编辑 / **readonly 可查看但不可编辑** /
+    #      hidden 隐藏。所以「变灰」= readonly ✓
     # ⚠️ 别用 accessPerm=hidden ✗ —— 实测（FileView 那边早就踩过）它会把**整个入口**
-    #    一起隐藏，而不是只隐藏设置项；官方文档只记了它 editable/readonly/hidden 三态。
+    #    一起隐藏，而不是只隐藏设置项。
     #    portPerm / pathPerm / fullUrlPerm 官方文档**未记载**，是照第三方应用抄来的，
     #    真正把那三行藏起来的就是它们 ✓
     ctrl_bad = []
     for name in ("cadviewer.Application", "cadviewer.view"):
         c = entries.get(name, {}).get("control", {})
-        if c.get("accessPerm") != "editable":
-            ctrl_bad.append("%s.accessPerm=%r（应为 editable）" % (name, c.get("accessPerm")))
+        if c.get("accessPerm") != "readonly":
+            ctrl_bad.append("%s.accessPerm=%r（应为 readonly —— 变灰不可点；"
+                            "hidden 会把整个入口也隐藏掉）" % (name, c.get("accessPerm")))
         for k in ("portPerm", "pathPerm", "fullUrlPerm"):
             if c.get(k) != "hidden":
                 ctrl_bad.append("%s.%s=%r（应为 hidden）" % (name, k, c.get(k)))
-    print("  设置页只藏「端口/路径/自定义URL」三行 : %s" % ("✓" if not ctrl_bad else "✗"))
+    print("  设置页：桌面访问变灰 + 藏三行地址   : %s" % ("✓" if not ctrl_bad else "✗"))
     for b in ctrl_bad:
         print("     %s" % b)
     ok &= not ctrl_bad

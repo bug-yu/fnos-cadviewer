@@ -8,7 +8,7 @@
       "url": "/cgi/ThirdParty/cadviewer/index.cgi/full/index.html",
       "allUsers": true,
       "control": {
-        "accessPerm": "editable",
+        "accessPerm": "readonly",
         "portPerm": "hidden",
         "pathPerm": "hidden",
         "fullUrlPerm": "hidden"
@@ -24,7 +24,7 @@
       "noDisplay": true,
       "allUsers": true,
       "control": {
-        "accessPerm": "editable",
+        "accessPerm": "readonly",
         "portPerm": "hidden",
         "pathPerm": "hidden",
         "fullUrlPerm": "hidden"
