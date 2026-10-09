@@ -31,10 +31,11 @@
 用法：python gen_icons.py
 """
 
+import math
 import os
 import sys
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.join(os.path.dirname(HERE), "cadviewer")   # fpk/cadviewer ← 包根目录
@@ -51,6 +52,12 @@ TILE_BR = (10, 32, 62)        # #0A203E
 CUBE_LINE = (56, 224, 245)    # #38E0F5 青色线框
 CUBE_DOT = (251, 146, 60)     # #FB923C 橙色顶点
 ACCENT = (245, 158, 11)       # #F59E0B 尺寸标注
+
+# 光泽磁贴的**竖直**渐变（上深下亮）—— 参考图那种「3D 玻璃按钮」的观感
+GLOSS_TOP = (23, 58, 107)     # #173A6B
+GLOSS_BOTTOM = (41, 197, 240)  # #29C5F0
+GLOSS_INK = (255, 255, 255)    # 字母用白色：在「深蓝→亮青」的渐变上对比度最高 ✓
+                               # （参考图的字母是深色的，但放在这个渐变上上半截会糊掉 ✗）
 
 # --- 等轴测立方体（都按 1024 的画布设计）-----------------------------------
 COS30 = 0.8660254037844387
@@ -135,6 +142,145 @@ def draw_plan(d, bx0, by0, bx1, by1, width, color):
     d.line([(xm, ym), (bx1, ym)], fill=color, width=width)
 
 
+# --- 字母「CAD」：几何自绘，**不依赖任何字体** -----------------------------
+# ⚠️ 为什么不用系统字体（Arial Black 之类）：换个没有该字体的机器就重跑不出来 ✗
+#    几何自绘 → 完全可复现、无授权问题、粗细/圆角都能精确控制 ✓
+#    笔画用 `line(joint="curve")` 画（圆角接头），两端再补圆点当**圆头** ——
+#    PIL 的 line 只支持圆角接头，端点是平的 ✗
+
+def polyline(d, pts, color, width):
+    """折线 + 两端圆头。pts 是像素坐标列表。"""
+    if len(pts) < 2:
+        return
+    d.line(pts, fill=color, width=width, joint="curve")
+    r = width / 2.0
+    for x, y in (pts[0], pts[-1]):
+        d.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+
+def arc_pts(cx, cy, rx, ry, a0, a1, n=72):
+    """椭圆弧采样成折线（角度制）。"""
+    return [(cx + rx * math.cos(math.radians(a0 + (a1 - a0) * i / n)),
+             cy + ry * math.sin(math.radians(a0 + (a1 - a0) * i / n)))
+            for i in range(n + 1)]
+
+
+def draw_cad(d, u, ox, oy, H, W, color):
+    """（已废弃）几何自绘的「CAD」。
+
+    ⚠️ 保留在这里只作记录：手绘字母**形状很难做好** ——
+       A 的腿太陡、D 的碗太小，试了两版都不像 ✗
+       改成用字体渲染（见 `draw_cad_font`），形状直接就对 ✓
+    """
+    raise NotImplementedError("改用 draw_cad_font")
+
+
+# 「CAD」用字体渲染。⚠️ 依赖一个**粗体**字体 ——
+# 渲染文字到图标里不涉及字体分发，授权上没问题；但**构建机得装**，
+# 所以这里给一串候选（Windows 与常见 Linux 发行版各覆盖一下），
+# 全都没有就**明确报错**，而不是悄悄退化成别的样子 ✗
+FONT_CANDIDATES = (
+    r"C:\Windows\Fonts\ariblk.ttf",        # Arial Black（最粗）
+    r"C:\Windows\Fonts\arialbd.ttf",       # Arial Bold
+    r"C:\Windows\Fonts\segoeuib.ttf",      # Segoe UI Bold
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+)
+
+
+def load_heavy_font():
+    for p in FONT_CANDIDATES:
+        if os.path.isfile(p):
+            return p
+    raise SystemExit("找不到可用的粗体字体，试过：\n  " + "\n  ".join(FONT_CANDIDATES))
+
+
+def fit_font(path, text, target_w, cap):
+    """二分出「文字墨迹宽度 <= target_w」的最大字号。"""
+    lo, hi = 8, cap
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        bb = ImageFont.truetype(path, mid).getbbox(text)
+        if bb[2] - bb[0] <= target_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return ImageFont.truetype(path, lo)
+
+
+def draw_cad_font(d, S, text, target_w, color, dy=0):
+    """把 text 按墨迹外接框**居中**画在 SxS 画布上，宽度缩到 target_w。"""
+    f = fit_font(load_heavy_font(), text, target_w, S)
+    bb = f.getbbox(text)
+    x = (S - (bb[2] - bb[0])) / 2.0 - bb[0]
+    y = (S - (bb[3] - bb[1])) / 2.0 - bb[1] + dy
+    d.text((x, y), text, font=f, fill=color)
+    return f
+
+
+def draw_magnifier(d, u, cx, cy, R, color, lw):
+    """放大镜：圆环 + 45° 手柄。"""
+    lw = int(u(lw))
+    d.ellipse([u(cx - R), u(cy - R), u(cx + R), u(cy + R)], outline=color, width=lw)
+    a = math.radians(45)
+    x0, y0 = cx + R * math.cos(a), cy + R * math.sin(a)
+    x1, y1 = x0 + R * 0.9 * math.cos(a), y0 + R * 0.9 * math.sin(a)
+    polyline(d, [(u(x0), u(y0)), (u(x1), u(y1))], color, int(lw * 1.7))
+
+
+def tile_layers(size, glossy=False, round_shape=False):
+    """返回 (颜色层 RGB @S, 蒙版 L @S) —— **先不挖透明**。
+
+    ⚠️⚠️ 为什么要把「颜色」和「蒙版」分开返回：
+       对**带透明像素的 RGBA** 直接做 LANCZOS 缩放，会把透明区的黑色 RGB
+       混进边缘，形成一圈**黑色锯齿** ✗ —— 深色底看不出来，
+       而「上深下亮」的渐变在亮青色那头非常明显 ✗
+       正确做法：颜色层全程不透明，缩完再套一个**单独缩放**的蒙版 ✓
+
+    glossy=True → 竖直渐变（上深下亮）+ 顶部一圈内描边高光
+                  （参考图那种「3D 玻璃按钮」的观感主要就来自这两件事）
+    round_shape=True → 圆形（参考图是圆的，但官方规范要求圆角矩形 ✗）
+    """
+    S = size * SS
+    if glossy:
+        color = Image.new("RGB", (S, S))
+        cd = ImageDraw.Draw(color)
+        for y in range(S):
+            t = y / max(1, S - 1)
+            cd.line([(0, y), (S, y)],
+                    fill=tuple(round(GLOSS_TOP[c] + (GLOSS_BOTTOM[c] - GLOSS_TOP[c]) * t)
+                               for c in range(3)), width=1)
+        # 顶部内描边高光：画一圈淡白描边，只保留上半部分（做出「上缘一道光」）
+        hl = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        hd = ImageDraw.Draw(hl)
+        inset, w = S * 0.035, int(S * 0.016)
+        if round_shape:
+            hd.ellipse([inset, inset, S - inset, S - inset],
+                       outline=(255, 255, 255, 95), width=w)
+        else:
+            hd.rounded_rectangle([inset, inset, S - inset, S - inset],
+                                 radius=round(size * RADIUS_RATIO * 0.9) * SS,
+                                 outline=(255, 255, 255, 95), width=w)
+        hl = hl.filter(ImageFilter.GaussianBlur(S * 0.006))
+        keep = Image.new("L", (S, S), 0)
+        ImageDraw.Draw(keep).rectangle([0, 0, S, int(S * 0.42)], fill=255)
+        hl.putalpha(Image.composite(hl.getchannel("A"),
+                                    Image.new("L", (S, S), 0), keep))
+        color = Image.alpha_composite(color.convert("RGBA"), hl).convert("RGB")
+    else:
+        color = gradient(size, TILE_TL, TILE_BR).convert("RGB")
+
+    m = Image.new("L", (S, S), 0)
+    md = ImageDraw.Draw(m)
+    if round_shape:
+        md.ellipse([0, 0, S - 1, S - 1], fill=255)
+    else:
+        md.rounded_rectangle([0, 0, S - 1, S - 1],
+                             radius=round(size * RADIUS_RATIO) * SS, fill=255)
+    return color, m
+
+
 def build(size, variant=VARIANT):
     S = size * SS
     k = S / 1024.0                       # 几何都按 1024 的画布设计，这里统一缩放
@@ -142,13 +288,26 @@ def build(size, variant=VARIANT):
     def u(v):
         return v * k
 
-    # ① 磁贴（圆角 + 斜向渐变）
-    mask = rounded_mask(size, round(size * RADIUS_RATIO)).resize((S, S), Image.NEAREST)
-    tile = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    tile.paste(gradient(size, TILE_TL, TILE_BR), (0, 0), mask)
+    # ① 磁贴。光泽系（cad_*）用竖直渐变 + 顶部高光；其余用斜向渐变。
+    #    ⚠️ 拿到的是 (颜色层, 蒙版) **两个图层**，透明留到最后一步再挖 ✓
+    if variant.startswith("cad_"):
+        color, mask = tile_layers(size, glossy=True,
+                                  round_shape=(variant == "cad_round"))
+    else:
+        color, mask = tile_layers(size, glossy=False)
+    tile = color.convert("RGBA")
     d = ImageDraw.Draw(tile)
 
-    if variant == "blueprint":
+    if variant.startswith("cad_"):
+        # 「CAD」+ 放大镜（参考图的方向）。字母用字体渲染（形状直接就对）
+        # ⚠️ 字母整体**左下移一点**，把右上角让给放大镜 —— 参考图就是这个构图 ✓
+        # ⚠️ 放大镜别做小：缩到 64px 后 <0.10 的半径会变成一个点 ✗
+        dy = 14 if variant == "cad_round" else 30
+        draw_cad_font(d, S, "CAD", S * 0.66, GLOSS_INK, dy=dy)
+        if variant != "cad_letters_plain":
+            draw_magnifier(d, u, 1024 * 0.775, 1024 * 0.215,
+                           1024 * 0.145, GLOSS_INK, 1024 * 0.045)
+    elif variant == "blueprint":
         bx0, by0, bx1, by1 = u(252), u(230), u(772), u(750)
         draw_plan(d, bx0, by0, bx1, by1, int(u(56)), (255, 255, 255))
         dy = u(848)
@@ -171,13 +330,16 @@ def build(size, variant=VARIANT):
             arrow_head(d, ex0 + u(44), dy, +1, u(68), u(34))
             arrow_head(d, ex1 - u(44), dy, -1, u(68), u(34))
 
-    return tile.resize((size, size), Image.LANCZOS)
+    # 收尾：**颜色层先缩（全不透明，不会有黑边），蒙版单独缩，最后才挖透明** ✓
+    out = tile.convert("RGB").resize((size, size), Image.LANCZOS).convert("RGBA")
+    out.putalpha(mask.resize((size, size), Image.LANCZOS))
+    return out
 
 
 def contact_sheet():
     """3 列 x 2 行对照图：上排 256px 原样，下排同一张缩到 64px 再放大 4 倍
     （NEAREST，用来直接看 64px 下糊不糊）。"""
-    combos = ["cube", "cube_dim", "blueprint"]
+    combos = ["cad_letters", "cad_letters_plain", "cad_round", "cube"]
     pad, cell = 24, 256
     W = pad + (cell + pad) * len(combos)
     H = pad + cell + pad + cell + pad
