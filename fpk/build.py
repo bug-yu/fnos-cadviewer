@@ -106,6 +106,57 @@ def check():
         print("     %s" % b)
     ok &= not ctrl_bad
 
+    # 图标规范（官方 developer.fnnas.com/docs/core-concepts/icon）：
+    #   根目录 ICON.PNG 64x64 + ICON_256.PNG 256x256；入口 app/ui/images/icon_{64,256}.png
+    #   ≤ 1024 KB；**圆角矩形主体**（不要直角满铺）
+    #   ⚠️ 这条以前没有断言，所以默认图标一直是**飞牛的通用蓝色牛头**，没人发现 ✗
+    #      （0.4.3 才换成自己设计的 CAD 图标）
+    #   ⚠️ 这里**不用 Pillow** —— 构建机上不一定装了它（本机系统 python 就没有），
+    #      而「有 Pillow 才检查、没有就跳过」等于没有断言 ✗
+    #      改成直接解析 PNG 头（IHDR）取尺寸与色彩类型，纯标准库 ✓
+    #      「四角必须透明」这条要解码像素，交给 gen_icons.py 自检（它必须有 Pillow）✓
+    def _png_head(data):
+        """返回 (宽, 高, 色彩类型)；不是 PNG 返回 None。6 = RGBA，2 = RGB。"""
+        if data[:8] != b"\x89PNG\r\n\x1a\n":
+            return None
+        return (int.from_bytes(data[16:20], "big"),
+                int.from_bytes(data[20:24], "big"),
+                data[25])
+
+    icon_bad = []
+    icon_spec = (("ICON.PNG", 64), ("ICON_256.PNG", 256))
+    inner_spec = (("ui/images/icon_64.png", 64), ("ui/images/icon_256.png", 256))
+    with tarfile.open(fileobj=io.BytesIO(raw)) as t:
+        outer_icons = [(n, want, t.extractfile(n).read())
+                       for n, want in icon_spec if n in names]
+        for n, _ in icon_spec:
+            if n not in names:
+                icon_bad.append("缺 %s" % n)
+    with tarfile.open(fileobj=io.BytesIO(app), mode="r:gz") as t2:
+        inner_files = [m.name for m in t2.getmembers() if m.isfile()]
+        inner_icons = [(n, want, t2.extractfile(n).read())
+                       for n, want in inner_spec if n in inner_files]
+        for n, _ in inner_spec:
+            if n not in inner_files:
+                icon_bad.append("缺 %s" % n)
+    for label, want, data in outer_icons + inner_icons:
+        if len(data) > 1024 * 1024:
+            icon_bad.append("%s 超过 1024 KB（%d 字节）" % (label, len(data)))
+        head = _png_head(data)
+        if head is None:
+            icon_bad.append("%s 不是 PNG" % label)
+            continue
+        w, h, ct = head
+        if (w, h) != (want, want):
+            icon_bad.append("%s 尺寸 %dx%d（应为 %dx%d）" % (label, w, h, want, want))
+        if ct != 6:
+            icon_bad.append("%s 色彩类型 %d（应为 6=RGBA —— 圆角需要透明四角）"
+                            % (label, ct))
+    print("  图标规范（64/256 + RGBA + ≤1MB）: %s" % ("✓" if not icon_bad else "✗"))
+    for b in icon_bad:
+        print("     %s" % b)
+    ok &= not icon_bad
+
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []
     for n in ("cmd/install_callback", "cmd/upgrade_callback"):

@@ -29,3 +29,8 @@ p0/package-lock.json
 .DS_Store
 __pycache__/
 *.pyc
+
+# ===== 图标生成的 QA 预览（由 fpk/tools/gen_icons.py 生成）=====
+# 用来肉眼验收「64px 下主体还看得清吗」和对比设计方案，属于构建产物
+fpk/tools/icon_preview_64x4.png
+fpk/tools/icon_variants.png
