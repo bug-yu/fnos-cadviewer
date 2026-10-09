@@ -157,6 +157,15 @@ def check():
         print("     %s" % b)
     ok &= not icon_bad
 
+    # 应用设置里的「访问权限」标签页必须隐藏 —— `disable_authorization_path=true`。
+    # 本应用走的是 JS SDK **按次选择器**（pickUserFile / openAppAuth），不预先授权固定目录，
+    # 所以那一栏永远是「暂无授权记录」，留着只会让人以为哪里没配好。
+    # ⚠️ 别退回 false（FileView 那边早就用同一写法了）；这条防回潮。
+    dap = re.search(r"(?m)^\s*disable_authorization_path\s*=\s*(\S+)", mf)
+    dap_ok = bool(dap) and dap.group(1).strip().lower() == "true"
+    print("  隐藏「访问权限」标签页        : %s" % ("✓" if dap_ok else "✗ ← 会显示「暂无授权记录」那一栏"))
+    ok &= dap_ok
+
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []
     for n in ("cmd/install_callback", "cmd/upgrade_callback"):
