@@ -164,14 +164,15 @@ def check():
         print("     %s" % b)
     ok &= not icon_bad
 
-    # 应用设置里的「访问权限」标签页必须隐藏 —— `disable_authorization_path=true`。
-    # 本应用走的是 JS SDK **按次选择器**（pickUserFile / openAppAuth），不预先授权固定目录，
-    # 所以那一栏永远是「暂无授权记录」，留着只会让人以为哪里没配好。
-    # ⚠️ 别退回 false（FileView 那边早就用同一写法了）；这条防回潮。
+    # 「应用设置 → 访问权限」**必须可见** —— 它是唯一能给本应用授权目录的入口。
+    # 本应用是纯 CGI、以**非 root 的应用用户**读盘，所以「文件管理器右键打开」
+    # 这种不走 pickUserFile 的路径，全靠这个授权。
+    # 曾设成 true（0.4.4 / 0.4.5）→ fnOS 升级后一律 403，用户连自救的地方都没有 ✗
+    # （当时的理由是「那一栏永远是暂无授权记录」—— 把结果当成了原因 ✗）
     dap = re.search(r"(?m)^\s*disable_authorization_path\s*=\s*(\S+)", mf)
-    dap_ok = bool(dap) and dap.group(1).strip().lower() == "true"
-    print("  隐藏「访问权限」标签页        : %s" % ("✓" if dap_ok else "✗ ← 会显示「暂无授权记录」那一栏"))
-    ok &= dap_ok
+    dap_hidden = bool(dap) and dap.group(1).strip().lower() == "true"
+    print("  「访问权限」页保持可见        : %s" % ("✗ ← 藏了就没法授权目录" if dap_hidden else "✓"))
+    ok &= not dap_hidden
 
     # 关键：安装回调必须补 +x（否则 CGI 404）
     cbs = []

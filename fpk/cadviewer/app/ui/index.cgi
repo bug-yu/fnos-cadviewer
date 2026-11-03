@@ -297,8 +297,22 @@ if [ "$REL_PATH" = "/api/raw" ]; then
     send_status "404 Not Found" "文件不存在或不可读：$P"
     exit 0
   fi
-  if [ ! -r "$P" ]; then
-    send_status "403 Forbidden" "没有读取权限：$P"
+  # ⚠️ 不再用 `[ -r ]` 预判（0.4.6 改）——
+  #    bash 的 `test -r` 走 **real uid**，而真正 `cat` 走 effective uid。
+  #    CGI 若经 setuid / 包装器执行，两者不一致就会出现「判为不可读、实际能读」的误报 ✗
+  #    → 直接**实际读一个字节**，以「能不能 open」为准 ✓
+  if ! head -c 1 -- "$P" >/dev/null 2>&1; then
+    # 真读不了：把定位所需的信息直接摆出来，别只报一句「没有权限」✗
+    _uid="$(awk '/^Uid:/{print "real="$2" eff="$3}' /proc/self/status 2>/dev/null)"
+    _file="$(stat -c 'owner=%U:%G mode=%a' "$P" 2>/dev/null)"
+    _dir="$(dirname "$P")"
+    send_status "403 Forbidden" "没有读取权限：$P
+（进程 ${_uid:-身份未知}；文件 ${_file:-读不到属性}）
+
+本应用以独立用户运行，读不了没有授权给它的目录。解法二选一：
+① 应用设置 → 访问权限 → 添加目录：$_dir
+② 或在 NAS 终端执行（只加「其他用户可读」，不改写权限）：
+   sudo setfacl -R -m o::rX \"$_dir\""
     exit 0
   fi
 

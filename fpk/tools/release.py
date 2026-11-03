@@ -23,6 +23,25 @@ MANIFEST = os.path.join(ROOT, "fpk", "cadviewer", "manifest")
 
 
 def token():
+    # ⚠️ 别只靠 `git credential fill`：它走 credential.helper，
+    #    而环境升级后 helper 指向的 `.workbuddy-ai/.../PortableGit/1.2.0` 已经不存在了，
+    #    命令直接报 "could not read Username" ✗（2026-11-03 踩到）
+    #    → 先自己找可用的 git-credential-manager（取版本号最大的），直接调它
+    import glob
+    for pat in ("~/.workbuddy/binaries/PortableGit/versions/*/mingw64/bin/git-credential-manager.exe",
+                "~/.workbuddy-ai/binaries/PortableGit/versions/*/mingw64/bin/git-credential-manager.exe"):
+        cands = sorted(glob.glob(os.path.expanduser(pat)))
+        if not cands:
+            continue
+        try:
+            p = subprocess.run([cands[-1], "get"], input="protocol=https\nhost=github.com\n\n",
+                               capture_output=True, text=True, timeout=90)
+        except Exception:
+            continue
+        for line in p.stdout.splitlines():
+            if line.startswith("password="):
+                return line[len("password="):].strip()
+    # 兜底：原来的方式（helper 正常时走这里）
     p = subprocess.run(["git", "credential", "fill"], cwd=ROOT,
                        input="protocol=https\nhost=github.com\n\n",
                        capture_output=True, text=True, timeout=90)
